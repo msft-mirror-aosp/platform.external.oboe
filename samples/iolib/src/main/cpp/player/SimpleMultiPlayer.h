@@ -41,10 +41,13 @@ public:
     virtual void onErrorAfterClose(oboe::AudioStream *oboeStream, oboe::Result error) override;
     virtual void onErrorBeforeClose(oboe::AudioStream * oboeStream, oboe::Result error) override;
 
-    void setupAudioStream(int32_t sampleRate, int32_t channelCount);
+    void setupAudioStream(int32_t channelCount);
     void teardownAudioStream();
 
     bool openStream();
+    bool startStream();
+
+    int getSampleRate() { return mSampleRate; }
 
     // Wave Sample Loading...
     /**
@@ -77,7 +80,7 @@ private:
     // Oboe Audio Stream
     oboe::ManagedStream mAudioStream;
 
-    // Audio attributes
+    // Playback Audio attributes
     int32_t mChannelCount;
     int32_t mSampleRate;
 
