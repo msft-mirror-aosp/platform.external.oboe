@@ -34,7 +34,7 @@ namespace iolib {
 constexpr int32_t kBufferSizeInBursts = 2; // Use 2 bursts as the buffer size (double buffer)
 
 SimpleMultiPlayer::SimpleMultiPlayer()
-  : mChannelCount(0), mSampleRate(0), mOutputReset(false)
+  : mChannelCount(0), mOutputReset(false)
 {}
 
 DataCallbackResult SimpleMultiPlayer::onAudioReady(AudioStream *oboeStream, void *audioData,
@@ -78,7 +78,7 @@ bool SimpleMultiPlayer::openStream() {
     // Create an audio stream
     AudioStreamBuilder builder;
     builder.setChannelCount(mChannelCount);
-    builder.setSampleRate(mSampleRate);
+    // we will resample source data to device rate, so take default sample rate
     builder.setCallback(this);
     builder.setPerformanceMode(PerformanceMode::LowLatency);
     builder.setSharingMode(SharingMode::Exclusive);
@@ -105,7 +105,13 @@ bool SimpleMultiPlayer::openStream() {
                 "setBufferSizeInFrames failed. Error: %s", convertToText(result));
     }
 
-    result = mAudioStream->requestStart();
+    mSampleRate = mAudioStream->getSampleRate();
+
+    return true;
+}
+
+bool SimpleMultiPlayer::startStream() {
+    Result result = mAudioStream->requestStart();
     if (result != Result::OK){
         __android_log_print(
                 ANDROID_LOG_ERROR,
@@ -117,11 +123,9 @@ bool SimpleMultiPlayer::openStream() {
     return true;
 }
 
-void SimpleMultiPlayer::setupAudioStream(int32_t sampleRate, int32_t channelCount) {
+void SimpleMultiPlayer::setupAudioStream(int32_t channelCount) {
     __android_log_print(ANDROID_LOG_INFO, TAG, "setupAudioStream()");
     mChannelCount = channelCount;
-    mSampleRate = sampleRate;
-    mSampleRate = sampleRate;
 
     openStream();
 }
@@ -135,6 +139,8 @@ void SimpleMultiPlayer::teardownAudioStream() {
 }
 
 void SimpleMultiPlayer::addSampleSource(SampleSource* source, SampleBuffer* buffer) {
+    buffer->resampleData(mSampleRate);
+
     mSampleBuffers.push_back(buffer);
     mSampleSources.push_back(source);
     mNumSampleBuffers++;

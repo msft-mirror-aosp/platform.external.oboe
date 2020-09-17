@@ -45,11 +45,17 @@ static SimpleMultiPlayer sDTPlayer;
  * Native (JNI) implementation of DrumPlayer.setupAudioStreamNative()
  */
 JNIEXPORT void JNICALL Java_com_plausiblesoftware_drumthumper_DrumPlayer_setupAudioStreamNative(
-        JNIEnv* env, jobject, jint sampleRate, jint numChannels) {
+        JNIEnv* env, jobject, jint numChannels) {
     __android_log_print(ANDROID_LOG_INFO, TAG, "%s", "init()");
 
     // we know in this case that the sample buffers are all 1-channel, 41K
-    sDTPlayer.setupAudioStream(sampleRate, numChannels);
+    sDTPlayer.setupAudioStream(numChannels);
+}
+
+JNIEXPORT void JNICALL
+Java_com_plausiblesoftware_drumthumper_DrumPlayer_startAudioStreamNative(
+        JNIEnv *env, jobject thiz) {
+    sDTPlayer.startStream();
 }
 
 /**
@@ -69,7 +75,7 @@ JNIEXPORT void JNICALL Java_com_plausiblesoftware_drumthumper_DrumPlayer_teardow
  * Native (JNI) implementation of DrumPlayer.loadWavAssetNative()
  */
 JNIEXPORT jboolean JNICALL Java_com_plausiblesoftware_drumthumper_DrumPlayer_loadWavAssetNative(
-        JNIEnv* env, jobject, jbyteArray bytearray, jint index, jfloat pan, jint rate, jint channels) {
+        JNIEnv* env, jobject, jbyteArray bytearray, jint index, jfloat pan, jint channels) {
     int len = env->GetArrayLength (bytearray);
 
     unsigned char* buf = new unsigned char[len];
@@ -80,8 +86,7 @@ JNIEXPORT jboolean JNICALL Java_com_plausiblesoftware_drumthumper_DrumPlayer_loa
     WavStreamReader reader(&stream);
     reader.parse();
 
-    jboolean isFormatValid =
-            (reader.getSampleRate() == rate) && (reader.getNumChannels() == channels);
+    jboolean isFormatValid = reader.getNumChannels() == channels;
 
     SampleBuffer* sampleBuffer = new SampleBuffer();
     sampleBuffer->loadSampleData(&reader);
@@ -127,7 +132,7 @@ JNIEXPORT void JNICALL Java_com_plausiblesoftware_drumthumper_DrumPlayer_clearOu
  */
 JNIEXPORT void JNICALL Java_com_plausiblesoftware_drumthumper_DrumPlayer_restartStream(JNIEnv*, jobject) {
     sDTPlayer.resetAll();
-    if (sDTPlayer.openStream()){
+    if (sDTPlayer.openStream() && sDTPlayer.startStream()){
         __android_log_print(ANDROID_LOG_INFO, TAG, "openStream successful");
     } else {
         __android_log_print(ANDROID_LOG_ERROR, TAG, "openStream failed");
