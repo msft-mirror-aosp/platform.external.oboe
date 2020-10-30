@@ -20,6 +20,10 @@
 #include "OboeDebug.h"
 #include "QuirksManager.h"
 
+#ifndef __ANDROID_API_R__
+#define __ANDROID_API_R__ 30
+#endif
+
 using namespace oboe;
 
 int32_t QuirksManager::DeviceQuirks::clipBufferSize(AudioStream &stream,
@@ -119,6 +123,28 @@ bool QuirksManager::isConversionNeeded(
     const bool isLowLatency = builder.getPerformanceMode() == PerformanceMode::LowLatency;
     const bool isInput = builder.getDirection() == Direction::Input;
     const bool isFloat = builder.getFormat() == AudioFormat::Float;
+
+    // There are multiple bugs involving using callback with a specified callback size.
+    // Issue #778: O to Q had a problem with Legacy INPUT streams for FLOAT streams
+    // and a specified callback size. It would assert because of a bad buffer size.
+    //
+    // Issue #973: O to R had a problem with Legacy output streams using callback and a specified callback size.
+    // An AudioTrack stream could still be running when the AAudio FixedBlockReader was closed.
+    // Internally b/161914201#comment25
+    //
+    // Issue #983: O to R would glitch if the framesPerCallback was too small.
+    //
+    // Most of these problems were related to Legacy stream. MMAP was OK. But we don't
+    // know if we will get an MMAP stream. So, to be safe, just do the conversion in Oboe.
+    if (OboeGlobals::areWorkaroundsEnabled()
+            && builder.willUseAAudio()
+            && builder.getCallback() != nullptr
+            && builder.getFramesPerCallback() != 0
+            && getSdkVersion() <= __ANDROID_API_R__) {
+        LOGI("QuirksManager::%s() avoid setFramesPerCallback(n>0)", __func__);
+        childBuilder.setFramesPerCallback(oboe::Unspecified);
+        conversionNeeded = true;
+    }
 
     // If a SAMPLE RATE is specified for low latency then let the native code choose an optimal rate.
     // TODO There may be a problem if the devices supports low latency
