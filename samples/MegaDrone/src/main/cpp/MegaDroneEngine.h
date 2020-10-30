@@ -33,21 +33,23 @@ class MegaDroneEngine : public IRestartable {
 public:
     MegaDroneEngine(std::vector<int> cpuIds);
 
-    virtual ~MegaDroneEngine() = default;
+    virtual ~MegaDroneEngine();
 
     void tap(bool isDown);
 
     // from IRestartable
     virtual void restart() override;
 
+    bool start();
+    bool stop();
+
 private:
-    oboe::ManagedStream mStream;
+    std::shared_ptr<AudioStream> mStream;
     std::shared_ptr<TappableAudioSource> mAudioSource;
     std::unique_ptr<DefaultAudioStreamCallback> mCallback;
 
     oboe::Result createPlaybackStream();
     void createCallback(std::vector<int> cpuIds);
-    void start();
 };
 
 
