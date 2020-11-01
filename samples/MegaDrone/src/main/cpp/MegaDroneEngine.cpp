@@ -31,9 +31,15 @@
  * @param cpuIds
  */
 MegaDroneEngine::MegaDroneEngine(std::vector<int> cpuIds) {
-
     createCallback(cpuIds);
-    start();
+}
+
+MegaDroneEngine::~MegaDroneEngine() {
+    if (mStream) {
+        LOGE("MegaDroneEngine destructor was called without calling stop()."
+             "Please call stop() to ensure stream resources are not leaked.");
+        stop();
+    }
 }
 
 void MegaDroneEngine::tap(bool isDown) {
@@ -41,9 +47,9 @@ void MegaDroneEngine::tap(bool isDown) {
 }
 
 void MegaDroneEngine::restart() {
+    stop();
     start();
 }
-
 // Create the playback stream
 oboe::Result MegaDroneEngine::createPlaybackStream() {
     oboe::AudioStreamBuilder builder;
@@ -51,7 +57,7 @@ oboe::Result MegaDroneEngine::createPlaybackStream() {
             ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
             ->setFormat(oboe::AudioFormat::Float)
             ->setCallback(mCallback.get())
-            ->openManagedStream(mStream);
+            ->openStream(mStream);
 }
 
 // Create the callback and set its thread affinity to the supplied CPU core IDs
@@ -66,14 +72,26 @@ void MegaDroneEngine::createCallback(std::vector<int> cpuIds){
     mCallback->setThreadAffinityEnabled(true);
 }
 
-void MegaDroneEngine::start(){
+bool MegaDroneEngine::start(){
     auto result = createPlaybackStream();
     if (result == Result::OK){
         // Create our synthesizer audio source using the properties of the stream
         mAudioSource = std::make_shared<Synth>(mStream->getSampleRate(), mStream->getChannelCount());
         mCallback->setSource(std::dynamic_pointer_cast<IRenderableAudio>(mAudioSource));
         mStream->start();
+        return true;
     } else {
         LOGE("Failed to create the playback stream. Error: %s", convertToText(result));
+        return false;
     }
 }
+
+bool MegaDroneEngine::stop() {
+    if(mStream && mStream->getState() != oboe::StreamState::Closed) {
+        mStream->stop();
+        mStream->close();
+    }
+    mStream.reset();
+    return true;
+}
+
