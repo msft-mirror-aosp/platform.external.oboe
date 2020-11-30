@@ -5,10 +5,10 @@ third_party {
     type: GIT
     value: "https://github.com/google/oboe"
   }
-  version: "386f057966b9640a25b63e7ac552d30d66b4e49d"
+  version: "52aca5741e256f2a51594ec818d1991de05cbfcd"
   last_upgrade_date {
     year: 2020
-    month: 9
-    day: 9
+    month: 10
+    day: 28
   }
 }
