@@ -130,7 +130,7 @@ void ActivityContext::configureBuilder(bool isInput, oboe::AudioStreamBuilder &b
     if (mUseCallback) {
         LOGD("ActivityContext::open() set callback to use oboeCallbackProxy, callback size = %d",
              callbackSize);
-        builder.setCallback(&oboeCallbackProxy);
+        builder.setDataCallback(&oboeCallbackProxy);
         builder.setFramesPerCallback(callbackSize);
     }
 }
@@ -507,7 +507,6 @@ void ActivityTapToTone::configureForStart() {
     mSinkFloat->pullReset();
     mSinkI16->pullReset();
 
-    sawPingGenerator.setEnabled(false);
     configureStreamGateway();
 }
 
