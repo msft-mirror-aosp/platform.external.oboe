@@ -77,7 +77,7 @@ Java_com_google_sample_oboe_manualtest_OboeAudioStream_setCallbackSize(JNIEnv *e
 // ================= OboeAudioOutputStream ================================
 
 JNIEXPORT void JNICALL
-Java_com_google_sample_oboe_manualtest_OboeAudioOutputStream_setToneEnabled(JNIEnv *env, jobject, jboolean);
+Java_com_google_sample_oboe_manualtest_OboeAudioOutputStream_trigger(JNIEnv *env, jobject);
 JNIEXPORT void JNICALL
 Java_com_google_sample_oboe_manualtest_OboeAudioOutputStream_setToneType(JNIEnv *env, jobject, jint);
 JNIEXPORT void JNICALL
@@ -381,8 +381,12 @@ Java_com_google_sample_oboe_manualtest_OboeAudioStream_getCallbackCount(
 
 JNIEXPORT jint JNICALL
 Java_com_google_sample_oboe_manualtest_OboeAudioStream_getLastErrorCallbackResult(
-        JNIEnv *env, jobject) {
-    return (jint) engine.getCurrentActivity()->getLastErrorCallbackResult();
+        JNIEnv *env, jobject, jint streamIndex) {
+    oboe::AudioStream *oboeStream = engine.getCurrentActivity()->getStream(streamIndex);
+    if (oboeStream != nullptr) {
+        return (jint) oboeStream->getLastErrorCallbackResult();
+    }
+    return 0;
 }
 
 JNIEXPORT jdouble JNICALL
@@ -465,15 +469,9 @@ Java_com_google_sample_oboe_manualtest_OboeAudioStream_isMMap(JNIEnv *env, jobje
 // ================= OboeAudioOutputStream ================================
 
 JNIEXPORT void JNICALL
-Java_com_google_sample_oboe_manualtest_OboeAudioOutputStream_setToneEnabled(
-        JNIEnv *env, jobject, jboolean enabled) {
-    engine.getCurrentActivity()->setEnabled(enabled);
-}
-
-JNIEXPORT void JNICALL
-Java_com_google_sample_oboe_manualtest_OboeAudioOutputStream_setToneType(
-        JNIEnv *env, jobject, jint toneType) {
-// FIXME    engine.getCurrentActivity()->setToneType(toneType);
+Java_com_google_sample_oboe_manualtest_OboeAudioOutputStream_trigger(
+        JNIEnv *env, jobject) {
+    engine.getCurrentActivity()->trigger();
 }
 
 JNIEXPORT void JNICALL
