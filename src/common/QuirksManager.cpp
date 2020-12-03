@@ -138,8 +138,8 @@ bool QuirksManager::isConversionNeeded(
     // know if we will get an MMAP stream. So, to be safe, just do the conversion in Oboe.
     if (OboeGlobals::areWorkaroundsEnabled()
             && builder.willUseAAudio()
-            && builder.getCallback() != nullptr
-            && builder.getFramesPerCallback() != 0
+            && builder.isDataCallbackSpecified()
+            && builder.getFramesPerDataCallback() != 0
             && getSdkVersion() <= __ANDROID_API_R__) {
         LOGI("QuirksManager::%s() avoid setFramesPerCallback(n>0)", __func__);
         childBuilder.setFramesPerCallback(oboe::Unspecified);
