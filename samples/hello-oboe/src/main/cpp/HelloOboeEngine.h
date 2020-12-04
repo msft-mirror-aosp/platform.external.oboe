@@ -22,6 +22,7 @@
 #include "SoundGenerator.h"
 #include "LatencyTuningCallback.h"
 #include "IRestartable.h"
+#include "DefaultErrorCallback.h"
 
 constexpr int32_t kBufferSizeAutomatic = 0;
 
@@ -33,6 +34,17 @@ public:
     virtual ~HelloOboeEngine() = default;
 
     void tap(bool isDown);
+
+    /**
+     * Open and start a stream.
+     * @return error or OK
+     */
+    oboe::Result start();
+
+    /**
+     * Stop and close the stream.
+     */
+    void stop();
 
     // From IRestartable
     void restart() override;
@@ -77,11 +89,10 @@ public:
 private:
     oboe::Result reopenStream();
     oboe::Result createPlaybackStream();
-    void         updateLatencyDetection();
-    oboe::Result start();
 
     std::shared_ptr<oboe::AudioStream> mStream;
     std::unique_ptr<LatencyTuningCallback> mLatencyCallback;
+    std::unique_ptr<DefaultErrorCallback> mErrorCallback;
     std::shared_ptr<SoundGenerator> mAudioSource;
     bool mIsLatencyDetectionSupported = false;
 
