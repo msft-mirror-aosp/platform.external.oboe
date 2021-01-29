@@ -22,7 +22,7 @@
 
 #include "oboe/Oboe.h"
 
-class OboeStreamCallbackProxy : public oboe::AudioStreamCallback {
+class OboeStreamCallbackProxy : public oboe::AudioStreamDataCallback {
 public:
 
     void setCallback(oboe::AudioStreamCallback *callback) {
@@ -53,10 +53,6 @@ public:
             oboe::AudioStream *audioStream,
             void *audioData,
             int numFrames) override;
-
-    void onErrorBeforeClose(oboe::AudioStream *audioStream, oboe::Result error) override;
-
-    void onErrorAfterClose(oboe::AudioStream *audioStream, oboe::Result error) override;
 
     /**
      * Specify the amount of artificial workload that will waste CPU cycles

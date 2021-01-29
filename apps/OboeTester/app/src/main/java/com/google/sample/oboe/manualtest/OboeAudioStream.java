@@ -201,10 +201,13 @@ abstract class OboeAudioStream extends AudioStreamBase {
     public native boolean isMMap(int streamIndex);
 
     @Override
-    public long getCallbackCount() {
-        return getCallbackCount(streamIndex);
+    public native long getCallbackCount(); // TODO Move to another class?
+
+    @Override
+    public int getLastErrorCallbackResult() {
+        return getLastErrorCallbackResult(streamIndex);
     }
-    public native long getCallbackCount(int streamIndex);
+    public native int getLastErrorCallbackResult(int streamIndex);
 
     @Override
     public long getFramesWritten() {
@@ -252,4 +255,5 @@ abstract class OboeAudioStream extends AudioStreamBase {
     public static native void setCallbackSize(int callbackSize);
 
     public static native int getOboeVersionNumber();
+
 }

@@ -51,14 +51,16 @@ public:
     void tick();
     void tap(int64_t eventTimeAsUptime);
 
-    // Inherited from oboe::AudioStreamCallback
+    // Inherited from oboe::AudioStreamDataCallback
     DataCallbackResult
     onAudioReady(AudioStream *oboeStream, void *audioData, int32_t numFrames) override;
+
+    // Inherited from oboe::AudioStreamErrorCallback
     void onErrorAfterClose(AudioStream *oboeStream, Result error) override;
 
 private:
     AAssetManager& mAssetManager;
-    AudioStream *mAudioStream { nullptr };
+    std::shared_ptr<AudioStream> mAudioStream;
     std::unique_ptr<Player> mClap;
     std::unique_ptr<Player> mBackingTrack;
     Mixer mMixer;

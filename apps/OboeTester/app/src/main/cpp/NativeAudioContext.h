@@ -192,6 +192,7 @@ class ActivityContext {
 public:
 
     ActivityContext() {}
+
     virtual ~ActivityContext() = default;
 
     oboe::AudioStream *getStream(int32_t streamIndex) {
@@ -271,8 +272,11 @@ public:
         return 0.0;
     }
 
-    virtual void setEnabled(bool enabled) {
-    }
+    /**
+     * Trigger a sound or impulse.
+     * @param enabled
+     */
+    virtual void trigger() {}
 
     bool isMMapUsed(int32_t streamIndex);
 
@@ -282,6 +286,14 @@ public:
 
     int64_t getCallbackCount() {
         return oboeCallbackProxy.getCallbackCount();
+    }
+
+    oboe::Result getLastErrorCallbackResult() {
+        oboe::AudioStream *stream = getOutputStream();
+        if (stream == nullptr) {
+            stream = getInputStream();
+        }
+        return stream ? oboe::Result::ErrorNull : stream->getLastErrorCallbackResult();
     }
 
     int32_t getFramesPerCallback() {
@@ -464,8 +476,8 @@ public:
 
     void configureForStart() override;
 
-    virtual void setEnabled(bool enabled) override {
-        sawPingGenerator.setEnabled(enabled);
+    virtual void trigger() override {
+        sawPingGenerator.trigger();
     }
 
     SawPingGenerator             sawPingGenerator;
