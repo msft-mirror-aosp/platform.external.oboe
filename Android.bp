@@ -86,11 +86,6 @@ cc_library_static {
         "-Wno-deprecated-declarations",
         "-Ofast",
         "-DOBOE_NO_INCLUDE_AAUDIO",
-        // work-around for Oboe issue: #1122
-        "-DAAUDIO_OK=0",
-        "-DAAUDIO_ERROR_TIMEOUT=-885",
-        "-DAAUDIO_STREAM_STATE_STARTING=3",
-        "-DAAUDIO_STREAM_STATE_STARTED=4"
     ],
     sdk_version: "current",
     stl: "libc++_static",
