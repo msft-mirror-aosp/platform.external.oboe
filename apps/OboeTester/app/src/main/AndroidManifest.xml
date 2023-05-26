@@ -109,12 +109,6 @@
             android:label="@string/title_error_callback"
             android:exported="true" />
 
-        <activity
-            android:name="com.google.sample.oboe.manualtest.TestDataPathsActivity"
-            android:label="@string/title_data_paths"
-            android:screenOrientation="portrait">
-        </activity>
-
         <service
             android:name=".MidiTapTester"
             android:permission="android.permission.BIND_MIDI_DEVICE_SERVICE"
