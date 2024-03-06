@@ -38,15 +38,15 @@ public:
             : LoopbackProcessor()
             , mInfiniteRecording(64 * 1024) {}
 
-
     virtual bool isOutputEnabled() { return true; }
 
     void setMagnitude(double magnitude) {
         mMagnitude = magnitude;
-        mScaledTolerance = mMagnitude * mTolerance;
+        mScaledTolerance = mMagnitude * getTolerance();
     }
 
     double getPhaseOffset() {
+        ALOGD("%s(), mPhaseOffset = %f\n", __func__, mPhaseOffset);
         return mPhaseOffset;
     }
 
@@ -106,7 +106,7 @@ public:
             incrementOutputPhase();
             output = (sinOut * mOutputAmplitude)
                      + (mWhiteNoise.nextRandomDouble() * getNoiseAmplitude());
-            // ALOGD("sin(%f) = %f, %f\n", mOutputPhase, sinOut,  mPhaseIncrement);
+            // ALOGD("sin(%f) = %f, %f\n", mOutputPhase, sinOut,  kPhaseIncrement);
         }
         for (int i = 0; i < channelCount; i++) {
             frameData[i] = (i == mOutputChannel) ? output : 0.0f;
@@ -129,7 +129,7 @@ public:
         double cosMean = mCosAccumulator / mFramesAccumulated;
         double magnitude = 2.0 * sqrt((sinMean * sinMean) + (cosMean * cosMean));
         if (phasePtr != nullptr) {
-            double phase = M_PI_2 - atan2(sinMean, cosMean);
+            double phase = atan2(cosMean, sinMean);
             *phasePtr = phase;
         }
         return magnitude;
@@ -138,6 +138,7 @@ public:
     /**
      * Perform sin/cos analysis on each sample.
      * Measure magnitude and phase on every period.
+     * Updates mPhaseOffset
      * @param sample
      * @param referencePhase
      * @return true if magnitude and phase updated
@@ -152,8 +153,10 @@ public:
         if (mFramesAccumulated == mSinePeriod) {
             const double coefficient = 0.1;
             double magnitude = calculateMagnitudePhase(&mPhaseOffset);
+            ALOGD("%s(), mPhaseOffset = %f\n", __func__, mPhaseOffset);
             // One pole averaging filter.
             setMagnitude((mMagnitude * (1.0 - coefficient)) + (magnitude * coefficient));
+            resetAccumulator();
             return true;
         } else {
             return false;
@@ -182,7 +185,8 @@ public:
     }
 
 protected:
-    static constexpr int32_t kTargetGlitchFrequency = 1000;
+    // Try to get a prime period so the waveform plot changes every time.
+    static constexpr int32_t kTargetGlitchFrequency = 48000 / 113;
 
     int32_t mSinePeriod = 1; // this will be set before use
     double  mInverseSinePeriod = 1.0;
