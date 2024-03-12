@@ -19,13 +19,22 @@ package com.mobileer.oboetester;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbManager;
 import android.media.AudioDeviceCallback;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.media.MicrophoneInfo;
+import android.media.midi.MidiDeviceInfo;
+import android.media.midi.MidiManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.mobileer.audio_device.AudioDeviceInfoConverter;
 
@@ -33,10 +42,10 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
 
 /**
- * Guide the user through a series of tests plugging in and unplugging a headset.
- * Print a summary at the end of any failures.
+ * Print a report of all the available audio devices.
  */
 public class DeviceReportActivity extends Activity {
 
@@ -63,6 +72,8 @@ public class DeviceReportActivity extends Activity {
     MyAudioDeviceCallback mDeviceCallback = new MyAudioDeviceCallback();
     private TextView      mAutoTextView;
     private AudioManager  mAudioManager;
+    private UsbManager    mUsbManager;
+    private MidiManager mMidiManager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -70,6 +81,26 @@ public class DeviceReportActivity extends Activity {
         setContentView(R.layout.activity_device_report);
         mAutoTextView = (TextView) findViewById(R.id.text_log_device_report);
         mAudioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        mUsbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
+        mMidiManager = (MidiManager) getSystemService(Context.MIDI_SERVICE);
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu_main, menu);
+        MenuItem settings = menu.findItem(R.id.action_share);
+        settings.setOnMenuItemClickListener(item -> {
+            if(mAutoTextView !=null) {
+                Intent sendIntent = new Intent();
+                sendIntent.setAction(Intent.ACTION_SEND);
+                sendIntent.putExtra(Intent.EXTRA_TEXT, mAutoTextView.getText().toString());
+                sendIntent.setType("text/plain");
+                Intent shareIntent = Intent.createChooser(sendIntent, null);
+                startActivity(shareIntent);
+            }
+            return false;
+        });
+        return true;
     }
 
     @Override
@@ -112,7 +143,76 @@ public class DeviceReportActivity extends Activity {
             report.append(item);
         }
         report.append(reportAllMicrophones());
+        report.append(reportUsbDevices());
+        report.append(reportMidiDevices());
         log(report.toString());
+    }
+
+    public String reportUsbDevices() {
+        StringBuffer report = new StringBuffer();
+        report.append("\n############################");
+        report.append("\nUsb Device Report:\n");
+        try {
+            HashMap<String, UsbDevice> usbDeviceList = mUsbManager.getDeviceList();
+            for (UsbDevice usbDevice : usbDeviceList.values()) {
+                report.append("\n==== USB Device ========= " + usbDevice.getDeviceId());
+                report.append("\nProduct Name       : " + usbDevice.getProductName());
+                report.append("\nProduct ID         : 0x" + Integer.toHexString(usbDevice.getProductId()));
+                report.append("\nManufacturer Name  : " + usbDevice.getManufacturerName());
+                report.append("\nVendor ID          : 0x" + Integer.toHexString(usbDevice.getVendorId()));
+                report.append("\nDevice Name        : " + usbDevice.getDeviceName());
+                report.append("\nDevice Protocol    : " + usbDevice.getDeviceProtocol());
+                report.append("\nDevice Class       : " + usbDevice.getDeviceClass());
+                report.append("\nDevice Subclass    : " + usbDevice.getDeviceSubclass());
+                report.append("\nVersion            : " + usbDevice.getVersion());
+                report.append("\n" + usbDevice);
+                report.append("\n");
+            }
+        } catch (Exception e) {
+            Log.e(TestAudioActivity.TAG, "Caught ", e);
+            showErrorToast(e.getMessage());
+            report.append("\nERROR: " + e.getMessage() + "\n");
+        }
+        return report.toString();
+    }
+
+    public String reportMidiDevices() {
+        StringBuffer report = new StringBuffer();
+        report.append("\n############################");
+        report.append("\nMidi Device Report:\n");
+        try {
+            MidiDeviceInfo[] midiDeviceInfos = mMidiManager.getDevices();
+            for (MidiDeviceInfo midiDeviceInfo : midiDeviceInfos) {
+                report.append("\n==== MIDI Device ========= " + midiDeviceInfo.getId());
+                addMidiDeviceInfoToDeviceReport(midiDeviceInfo, report);
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                Set<MidiDeviceInfo> umpDeviceInfos =
+                        mMidiManager.getDevicesForTransport(MidiManager.TRANSPORT_UNIVERSAL_MIDI_PACKETS);
+                for (MidiDeviceInfo midiDeviceInfo : umpDeviceInfos) {
+                    report.append("\n==== UMP Device ========= " + midiDeviceInfo.getId());
+                    addMidiDeviceInfoToDeviceReport(midiDeviceInfo, report);
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TestAudioActivity.TAG, "Caught ", e);
+            showErrorToast(e.getMessage());
+            report.append("\nERROR: " + e.getMessage() + "\n");
+        }
+        return report.toString();
+    }
+
+    private void addMidiDeviceInfoToDeviceReport(MidiDeviceInfo midiDeviceInfo,
+                                                 StringBuffer report){
+        report.append("\nInput Count        : " + midiDeviceInfo.getInputPortCount());
+        report.append("\nOutput Count       : " + midiDeviceInfo.getOutputPortCount());
+        report.append("\nType               : " + midiDeviceInfo.getType());
+        report.append("\nIs Private         : " + midiDeviceInfo.isPrivate());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            report.append("\nDefault Protocol   : " + midiDeviceInfo.getDefaultProtocol());
+        }
+        report.append("\n" + midiDeviceInfo);
+        report.append("\n");
     }
 
     public String reportAllMicrophones() {
@@ -127,8 +227,12 @@ public class DeviceReportActivity extends Activity {
                     report.append(micItem);
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                Log.e(TestAudioActivity.TAG, "Caught ", e);
                 return e.getMessage();
+            } catch (Exception e) {
+                Log.e(TestAudioActivity.TAG, "Caught ", e);
+                showErrorToast(e.getMessage());
+                report.append("\nERROR: " + e.getMessage() + "\n");
             }
         } else {
             report.append("\nMicrophoneInfo not available on V" + android.os.Build.VERSION.SDK_INT);
@@ -169,4 +273,20 @@ public class DeviceReportActivity extends Activity {
         });
     }
 
+    protected void showErrorToast(String message) {
+        String text = "Error: " + message;
+        Log.e(TestAudioActivity.TAG, text);
+        showToast(text);
+    }
+
+    protected void showToast(final String message) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Toast.makeText(DeviceReportActivity.this,
+                        message,
+                        Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
 }
