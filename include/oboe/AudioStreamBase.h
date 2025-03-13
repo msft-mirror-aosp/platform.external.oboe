@@ -122,6 +122,14 @@ public:
     }
 
     /**
+     * For internal use only.
+     * @return the presentation callback object for this stream, if set.
+     */
+    std::shared_ptr<AudioStreamPresentationCallback> getPresentationCallback() const {
+        return mSharedPresentationCallback;
+    }
+
+    /**
      * @return true if a data callback was set for this stream
      */
     bool isDataCallbackSpecified() const {
@@ -135,6 +143,13 @@ public:
      */
     bool isErrorCallbackSpecified() const {
         return mErrorCallback != nullptr;
+    }
+
+    /**
+     * @return true if a presentation callback was set for this stream
+     */
+    bool isPresentationCallbackSpecified() const {
+        return mSharedPresentationCallback != nullptr;
     }
 
     /**
@@ -244,6 +259,8 @@ protected:
     AudioStreamErrorCallback       *mErrorCallback = nullptr;
     std::shared_ptr<AudioStreamErrorCallback> mSharedErrorCallback;
 
+    std::shared_ptr<AudioStreamPresentationCallback> mSharedPresentationCallback;
+
     /** Number of audio frames which will be requested in each callback */
     int32_t                         mFramesPerCallback = kUnspecified;
     /** Stream channel count */
@@ -307,7 +324,7 @@ protected:
     // Control whether Oboe can convert data formats to achieve optimal results.
     bool                            mFormatConversionAllowed = false;
     // Control whether and how Oboe can convert sample rates to achieve optimal results.
-    SampleRateConversionQuality     mSampleRateConversionQuality = SampleRateConversionQuality::None;
+    SampleRateConversionQuality     mSampleRateConversionQuality = SampleRateConversionQuality::Medium;
 
     /** Validate stream parameters that might not be checked in lower layers */
     virtual Result isValidConfig() {

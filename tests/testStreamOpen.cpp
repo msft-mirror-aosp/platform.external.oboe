@@ -49,7 +49,7 @@ protected:
 
     bool openStream() {
         EXPECT_EQ(mStream, nullptr);
-        Result r = mBuilder.openStream(&mStream);
+        Result r = mBuilder.openStream(mStream);
         EXPECT_EQ(r, Result::OK) << "Failed to open stream " << convertToText(r);
         EXPECT_EQ(0, openCount) << "Should start with a fresh object every time.";
         openCount++;
@@ -57,11 +57,10 @@ protected:
     }
 
     bool closeStream() {
-        if (mStream != nullptr){
+        if (mStream){
           Result r = mStream->close();
           EXPECT_EQ(r, Result::OK) << "Failed to close stream. " << convertToText(r);
           usleep(500 * 1000); // give previous stream time to settle
-          mStream = nullptr;
           return (r == Result::OK);
         } else {
           return true;
@@ -101,7 +100,7 @@ protected:
     }
 
     AudioStreamBuilder mBuilder;
-    AudioStream *mStream = nullptr;
+    std::shared_ptr<AudioStream> mStream;
     int32_t openCount = 0;
 
 };
@@ -145,6 +144,7 @@ TEST_F(StreamOpenOutput, ForOpenSLESDefaultChannelCountIsUsed){
 TEST_F(StreamOpenOutput, OutputForOpenSLESPerformanceModeShouldBeNone){
     // We will not get a LowLatency stream if we request 16000 Hz.
     mBuilder.setSampleRate(16000);
+    mBuilder.setSampleRateConversionQuality(SampleRateConversionQuality::None);
     mBuilder.setPerformanceMode(PerformanceMode::LowLatency);
     mBuilder.setDirection(Direction::Output);
     mBuilder.setAudioApi(AudioApi::OpenSLES);
@@ -156,6 +156,7 @@ TEST_F(StreamOpenOutput, OutputForOpenSLESPerformanceModeShouldBeNone){
 TEST_F(StreamOpenInput, InputForOpenSLESPerformanceModeShouldBeNone){
     // We will not get a LowLatency stream if we request 16000 Hz.
     mBuilder.setSampleRate(16000);
+    mBuilder.setSampleRateConversionQuality(SampleRateConversionQuality::None);
     mBuilder.setPerformanceMode(PerformanceMode::LowLatency);
     mBuilder.setDirection(Direction::Input);
     mBuilder.setAudioApi(AudioApi::OpenSLES);
@@ -168,7 +169,7 @@ TEST_F(StreamOpenOutput, ForOpenSlesIllegalFormatRejectedOutput) {
     mBuilder.setAudioApi(AudioApi::OpenSLES);
     mBuilder.setPerformanceMode(PerformanceMode::LowLatency);
     mBuilder.setFormat(static_cast<AudioFormat>(666));
-    Result r = mBuilder.openStream(&mStream);
+    Result r = mBuilder.openStream(mStream);
     EXPECT_NE(r, Result::OK) << "Should not open stream " << convertToText(r);
     if (mStream != nullptr) {
         mStream->close(); // just in case it accidentally opened
@@ -180,7 +181,7 @@ TEST_F(StreamOpenInput, ForOpenSlesIllegalFormatRejectedInput) {
     mBuilder.setPerformanceMode(PerformanceMode::LowLatency);
     mBuilder.setDirection(Direction::Input);
     mBuilder.setFormat(static_cast<AudioFormat>(666));
-    Result r = mBuilder.openStream(&mStream);
+    Result r = mBuilder.openStream(mStream);
     EXPECT_NE(r, Result::OK) << "Should not open stream " << convertToText(r);
     if (mStream != nullptr) {
         mStream->close(); // just in case it accidentally opened
@@ -282,7 +283,7 @@ TEST_F(StreamOpenInput, RecordingFormatFloatReturnsErrorBeforeMarshmallow){
     if (getSdkVersion() < __ANDROID_API_M__){
         mBuilder.setDirection(Direction::Input);
         mBuilder.setFormat(AudioFormat::Float);
-        Result r = mBuilder.openStream(&mStream);
+        Result r = mBuilder.openStream(mStream);
         ASSERT_EQ(r, Result::ErrorInvalidFormat) << convertToText(r);
         ASSERT_TRUE(closeStream());
     }
@@ -335,7 +336,7 @@ TEST_F(StreamOpenOutput, PlaybackFormatFloatReturnsErrorBeforeLollipop){
     if (getSdkVersion() < __ANDROID_API_L__){
         mBuilder.setDirection(Direction::Output);
         mBuilder.setFormat(AudioFormat::Float);
-        Result r = mBuilder.openStream(&mStream);
+        Result r = mBuilder.openStream(mStream);
         ASSERT_EQ(r, Result::ErrorInvalidFormat);
         ASSERT_TRUE(closeStream());
     }
@@ -574,7 +575,7 @@ TEST_F(StreamOpenOutput, OboeExtensions){
         ASSERT_EQ(OboeExtensions::setMMapEnabled(false), 0);
         ASSERT_FALSE(OboeExtensions::isMMapEnabled());
         ASSERT_TRUE(openStream());
-        EXPECT_FALSE(OboeExtensions::isMMapUsed(mStream));
+        EXPECT_FALSE(OboeExtensions::isMMapUsed(mStream.get()));
         ASSERT_TRUE(closeStream());
 
         ASSERT_EQ(OboeExtensions::setMMapEnabled(true), 0);

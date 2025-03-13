@@ -15,6 +15,7 @@
     <string name="playAudio">Play</string>
     <string name="measure">Measure</string>
     <string name="cancel">Cancel</string>
+    <string name="scan">Scan</string>
     <string name="clear">Clear</string>
     <string name="clear_comm">clearCommunicationDevice()</string>
     <string name="runTest">Run</string>
@@ -136,6 +137,13 @@
         <item>Sonification</item>
     </string-array>
 
+    <string name="spatialization_behavior_prompt">Spatialization:</string>
+    <string-array name="spatialization_behaviors">
+        <item>Unspecified</item>
+        <item>Auto</item>
+        <item>Never</item>
+    </string-array>
+
     <string name="channel_count_prompt">Channels:</string>
     <string-array name="channel_counts">
         <item>0</item>
@@ -183,6 +191,7 @@
         <item>NONE</item>
         <item>POWER_SAVING</item>
         <item>LOW_LATENCY</item>
+        <item>POWER_SAVING_OFFLOAD</item>
     </string-array>
 
     <!--Must match SignalType in NativeAudioContext.h-->
@@ -240,6 +249,7 @@
     <string name="title_route_during_callback">Route Callback Test</string>
     <string name="title_dynamic_load">Dynamic CPU Load</string>
     <string name="title_cold_start_latency">Cold Start Latency</string>
+    <string name="title_rapid_cycle">Rapid Cycle</string>
 
     <string name="need_record_audio_permission">"This app needs RECORD_AUDIO permission"</string>
     <string name="share">Share</string>
@@ -270,6 +280,11 @@
         More likely to crash with Bluetooth\n
         headsets. Fixed in SDK 34 (U).\n
         Issue #1763
+    </string>
+
+    <string name="rapid_cycle_intro">
+        Maybe cause a crash or hang by rapidly\n
+        opening, starting, and closing streams.\n
     </string>
 
     <string-array name="conversion_qualities">

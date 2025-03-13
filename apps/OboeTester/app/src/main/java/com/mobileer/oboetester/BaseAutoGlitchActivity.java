@@ -22,9 +22,11 @@ import android.content.Context;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.os.Bundle;
+import android.os.Environment;
 
 import androidx.annotation.Nullable;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Locale;
@@ -80,6 +82,7 @@ public class BaseAutoGlitchActivity extends GlitchActivity {
         public final int mmapUsed;
         public final int performanceMode;
         public final int sharingMode;
+        public final int sessionId;
 
         public TestStreamOptions(StreamConfiguration configuration, int channelUsed) {
             this.channelUsed = channelUsed;
@@ -89,6 +92,7 @@ public class BaseAutoGlitchActivity extends GlitchActivity {
             mmapUsed = configuration.isMMap() ? 1 : 0;
             performanceMode = configuration.getPerformanceMode();
             sharingMode = configuration.getSharingMode();
+            sessionId = configuration.getSessionId();
         }
 
         int countDifferences(TestStreamOptions other) {
@@ -100,6 +104,7 @@ public class BaseAutoGlitchActivity extends GlitchActivity {
             count += (mmapUsed != other.mmapUsed) ? 1 : 0;
             count += (performanceMode != other.performanceMode) ? 1 : 0;
             count += (sharingMode != other.sharingMode) ? 1 : 0;
+            count += (sessionId != other.sessionId) ? 1 : 0;
             return count;
         }
 
@@ -112,6 +117,7 @@ public class BaseAutoGlitchActivity extends GlitchActivity {
             text.append(TestDataPathsActivity.comparePassedField(prefix,this, passed, "mmapUsed"));
             text.append(TestDataPathsActivity.comparePassedField(prefix,this, passed, "performanceMode"));
             text.append(TestDataPathsActivity.comparePassedField(prefix,this, passed, "sharingMode"));
+            text.append(TestDataPathsActivity.comparePassedField(prefix,this, passed, "sessionId"));
             return text.toString();
         }
         @Override
@@ -236,6 +242,7 @@ public class BaseAutoGlitchActivity extends GlitchActivity {
                 + ", ID = " + String.format(Locale.getDefault(), "%2d", config.getDeviceId())
                 + ", Perf = " + StreamConfiguration.convertPerformanceModeToText(
                         config.getPerformanceMode())
+                + ((config.getSessionId() > 0) ? (", sessionId = " + config.getSessionId()) : "")
                 + ",\n     ch = " + channelText(channel, config.getChannelCount())
                 + ", cm = " + convertChannelMaskToText(config.getChannelMask());
     }
@@ -244,6 +251,10 @@ public class BaseAutoGlitchActivity extends GlitchActivity {
         return ("burst=" + stream.getFramesPerBurst()
                 + ", size=" + stream.getBufferSizeInFrames()
                 + ", cap=" + stream.getBufferCapacityInFrames()
+                + "\n     HW: sr=" + stream.getHardwareSampleRate()
+                + ", ch=" + stream.getHardwareChannelCount()
+                + ", fmt=" + (stream.getHardwareFormat() == StreamConfiguration.UNSPECIFIED ?
+                "?" : StreamConfiguration.convertFormatToText(stream.getHardwareFormat()))
         );
     }
 
@@ -257,6 +268,7 @@ public class BaseAutoGlitchActivity extends GlitchActivity {
     protected TestResult testCurrentConfigurations() throws InterruptedException {
         mAutomatedTestRunner.incrementTestCount();
         if ((getSingleTestIndex() >= 0) && (getTestCount() != getSingleTestIndex())) {
+            mAutomatedTestRunner.incrementSkipCount();
             return null;
         }
 
@@ -287,9 +299,9 @@ public class BaseAutoGlitchActivity extends GlitchActivity {
             outStream.setBufferSizeInFrames(sizeFrames);
             AudioStreamBase inStream = mAudioInputTester.getCurrentAudioStream();
             log("  " + getConfigText(actualInConfig));
-            log("      " + getStreamText(inStream));
+            log("     " + getStreamText(inStream));
             log("  " + getConfigText(actualOutConfig));
-            log("      " + getStreamText(outStream));
+            log("     " + getStreamText(outStream));
         } catch (Exception e) {
             openFailed = true;
             log(e.getMessage());
@@ -357,6 +369,7 @@ public class BaseAutoGlitchActivity extends GlitchActivity {
             mAutomatedTestRunner.incrementFailCount();
         } else if (skipped) {
             log(TEXT_SKIP + " - " + skipReason);
+            mAutomatedTestRunner.incrementSkipCount();
         } else {
             log("Result:");
             reason += didTestFail();
@@ -372,13 +385,13 @@ public class BaseAutoGlitchActivity extends GlitchActivity {
                 appendFailedSummary("  " + getConfigText(actualInConfig) + "\n");
                 appendFailedSummary("  " + getConfigText(actualOutConfig) + "\n");
                 appendFailedSummary("    " + resultText + "\n");
+                saveRecordingAsWave();
                 mAutomatedTestRunner.incrementFailCount();
                 result = TEST_RESULT_FAILED;
             } else {
                 mAutomatedTestRunner.incrementPassCount();
                 result = TEST_RESULT_PASSED;
             }
-
         }
         mAutomatedTestRunner.flushLog();
 
@@ -390,6 +403,46 @@ public class BaseAutoGlitchActivity extends GlitchActivity {
             mTestResults.add(testResult);
         }
         return testResult;
+    }
+
+    void testPerformancePaths() throws InterruptedException {
+        StreamConfiguration requestedInConfig = mAudioInputTester.requestedConfiguration;
+        StreamConfiguration requestedOutConfig = mAudioOutTester.requestedConfiguration;
+
+        requestedInConfig.setSharingMode(StreamConfiguration.SHARING_MODE_SHARED);
+        requestedOutConfig.setSharingMode(StreamConfiguration.SHARING_MODE_SHARED);
+
+        // Legacy NONE
+        requestedInConfig.setMMap(false);
+        requestedOutConfig.setMMap(false);
+        requestedInConfig.setPerformanceMode(StreamConfiguration.PERFORMANCE_MODE_NONE);
+        requestedOutConfig.setPerformanceMode(StreamConfiguration.PERFORMANCE_MODE_NONE);
+        testCurrentConfigurations();
+
+        // Legacy LOW_LATENCY
+        requestedInConfig.setPerformanceMode(StreamConfiguration.PERFORMANCE_MODE_LOW_LATENCY);
+        requestedOutConfig.setPerformanceMode(StreamConfiguration.PERFORMANCE_MODE_LOW_LATENCY);
+        testCurrentConfigurations();
+
+        // MMAP LowLatency
+        if (NativeEngine.isMMapSupported()) {
+            requestedInConfig.setMMap(true);
+            requestedOutConfig.setMMap(true);
+            testCurrentConfigurations();
+        }
+        requestedInConfig.setMMap(false);
+        requestedOutConfig.setMMap(false);
+    }
+
+    private void saveRecordingAsWave() {
+        File recordingDir = getExternalFilesDir(Environment.DIRECTORY_MUSIC);
+        File waveFile = new File(recordingDir, String.format("glitch_%03d.wav", getTestCount()));
+        int saveResult = saveWaveFile(waveFile.getAbsolutePath());
+        if (saveResult > 0) {
+            appendFailedSummary("Saved in " + waveFile.getAbsolutePath() + "\n");
+        } else {
+            appendFailedSummary("saveWaveFile() returned " + saveResult + "\n");
+        }
     }
 
     protected int getTestCount() {
@@ -437,6 +490,10 @@ public class BaseAutoGlitchActivity extends GlitchActivity {
         }
     }
 
+    /**
+     * @param type
+     * @return list of compatible device types in preferred order
+     */
     protected ArrayList<Integer> getCompatibleDeviceTypes(int type) {
         ArrayList<Integer> compatibleTypes = new ArrayList<Integer>();
         switch(type) {
@@ -448,9 +505,14 @@ public class BaseAutoGlitchActivity extends GlitchActivity {
                 compatibleTypes.add(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER);
                 break;
             case AudioDeviceInfo.TYPE_USB_DEVICE:
+                // Give priority to an exact match of DEVICE.
                 compatibleTypes.add(AudioDeviceInfo.TYPE_USB_DEVICE);
-                // A USB Device is often mistaken for a headset.
                 compatibleTypes.add(AudioDeviceInfo.TYPE_USB_HEADSET);
+                break;
+            case AudioDeviceInfo.TYPE_USB_HEADSET:
+                // Give priority to an exact match of HEADSET.
+                compatibleTypes.add(AudioDeviceInfo.TYPE_USB_HEADSET);
+                compatibleTypes.add(AudioDeviceInfo.TYPE_USB_DEVICE);
                 break;
             default:
                 compatibleTypes.add(type);
@@ -467,9 +529,12 @@ public class BaseAutoGlitchActivity extends GlitchActivity {
     protected AudioDeviceInfo findCompatibleInputDevice(int outputDeviceType) {
         ArrayList<Integer> compatibleDeviceTypes = getCompatibleDeviceTypes(outputDeviceType);
         AudioDeviceInfo[] devices = mAudioManager.getDevices(AudioManager.GET_DEVICES_INPUTS);
-        for (AudioDeviceInfo candidate : devices) {
-            if (compatibleDeviceTypes.contains(candidate.getType())) {
-                return candidate;
+        // Scan the compatible types in order of preference.
+        for (int compatibleType : compatibleDeviceTypes) {
+            for (AudioDeviceInfo candidate : devices) {
+                if (candidate.getType() == compatibleType) {
+                    return candidate;
+                }
             }
         }
         return null;
