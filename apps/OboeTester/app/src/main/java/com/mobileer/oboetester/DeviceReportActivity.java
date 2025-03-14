@@ -17,7 +17,6 @@
 package com.mobileer.oboetester;
 
 import android.annotation.TargetApi;
-import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.hardware.usb.UsbDevice;
@@ -25,6 +24,8 @@ import android.hardware.usb.UsbManager;
 import android.media.AudioDeviceCallback;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
+import android.media.MediaCodecInfo;
+import android.media.MediaCodecList;
 import android.media.MicrophoneInfo;
 import android.media.midi.MidiDeviceInfo;
 import android.media.midi.MidiManager;
@@ -36,9 +37,12 @@ import android.view.MenuItem;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AppCompatActivity;
+
 import com.mobileer.audio_device.AudioDeviceInfoConverter;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -47,7 +51,7 @@ import java.util.Set;
 /**
  * Print a report of all the available audio devices.
  */
-public class DeviceReportActivity extends Activity {
+public class DeviceReportActivity extends AppCompatActivity {
 
     class MyAudioDeviceCallback extends AudioDeviceCallback {
         private HashMap<Integer, AudioDeviceInfo> mDevices
@@ -136,15 +140,17 @@ public class DeviceReportActivity extends Activity {
                 .append(", ").append(Build.PRODUCT).append("\n");
 
         report.append(reportExtraDeviceInfo());
+        report.append("\n");
 
         for (AudioDeviceInfo deviceInfo : devices) {
             report.append("\n==== Device =================== " + deviceInfo.getId() + "\n");
-            String item = AudioDeviceInfoConverter.toString(deviceInfo);
+            String item = AudioDeviceInfoConverter.toString(mAudioManager, deviceInfo);
             report.append(item);
         }
         report.append(reportAllMicrophones());
         report.append(reportUsbDevices());
         report.append(reportMidiDevices());
+        report.append(reportMediaCodecs());
         log(report.toString());
     }
 
@@ -250,6 +256,55 @@ public class DeviceReportActivity extends Activity {
         report.append(AudioQueryTools.getMediaPerformanceClass());
         report.append("\n\nProperties:");
         report.append(AudioQueryTools.getAudioPropertyReport());
+        return report.toString();
+    }
+
+    public String reportMediaCodecs() {
+        StringBuffer report = new StringBuffer();
+        report.append("\n############################");
+        report.append("\nMedia Codec Device Report:\n");
+        try {
+            MediaCodecList mediaCodecList = new MediaCodecList(MediaCodecList.REGULAR_CODECS);
+            MediaCodecInfo[] mediaCodecInfos = mediaCodecList.getCodecInfos();
+            for (MediaCodecInfo mediaCodecInfo : mediaCodecInfos) {
+                report.append("\n==== MediaCodecInfo ========= " + mediaCodecInfo.getName());
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    report.append("\nCanonical Name         : " + mediaCodecInfo.getCanonicalName());
+                    report.append("\nIs Alias               : " + mediaCodecInfo.isAlias());
+                    report.append("\nIs Hardware Accelerated: " + mediaCodecInfo.isHardwareAccelerated());
+                    report.append("\nIs Software Only       : " + mediaCodecInfo.isSoftwareOnly());
+                    report.append("\nIs Vendor              : " + mediaCodecInfo.isVendor());
+                }
+                report.append("\nIs Encoder             : " + mediaCodecInfo.isEncoder());
+                report.append("\nSupported Types        : " + Arrays.toString(mediaCodecInfo.getSupportedTypes()));
+                for(String type : mediaCodecInfo.getSupportedTypes()) {
+                    MediaCodecInfo.CodecCapabilities codecCapabilities =
+                            mediaCodecInfo.getCapabilitiesForType(type);
+                    MediaCodecInfo.AudioCapabilities audioCapabilities =
+                            codecCapabilities.getAudioCapabilities();
+                    if (audioCapabilities != null) {
+                        report.append("\nAudio Type: " + type);
+                        report.append("\nBitrate Range: " + audioCapabilities.getBitrateRange());
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            report.append("\nInput Channel Count Ranges: " + Arrays.toString(audioCapabilities.getInputChannelCountRanges()));
+                            report.append("\nMin Input Channel Count: " + audioCapabilities.getMinInputChannelCount());
+                        }
+                        report.append("\nMax Input Channel Count: " + audioCapabilities.getMaxInputChannelCount());
+                        report.append("\nSupported Sample Rate Ranges: " + Arrays.toString(audioCapabilities.getSupportedSampleRateRanges()));
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            // Avoid bug b/122116282
+                            report.append("\nSupported Sample Rates: " + Arrays.toString(audioCapabilities.getSupportedSampleRates()));
+                        }
+                    }
+                    report.append("\nIs Encoder             : " + mediaCodecInfo.isEncoder());
+                }
+                report.append("\n");
+            }
+        } catch (Exception e) {
+            Log.e(TestAudioActivity.TAG, "Caught ", e);
+            showErrorToast(e.getMessage());
+            report.append("\nERROR: " + e.getMessage() + "\n");
+        }
         return report.toString();
     }
 
