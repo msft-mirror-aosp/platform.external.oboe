@@ -16,7 +16,6 @@
 
 package com.mobileer.oboetester;
 
-import android.content.Intent;
 import android.media.AudioManager;
 import android.os.Bundle;
 
@@ -61,6 +60,7 @@ public class IntentBasedTestSupport {
     public static final String KEY_FILE_NAME = "file";
     public static final String KEY_BUFFER_BURSTS = "buffer_bursts";
     public static final String KEY_BACKGROUND = "background";
+    public static final String KEY_FOREGROUND_SERVICE = "foreground_service";
     public static final String KEY_VOLUME = "volume";
 
     public static final String KEY_VOLUME_TYPE = "volume_type";
