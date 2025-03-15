@@ -100,8 +100,10 @@ Result AudioStreamBuilder::openStreamInternal(AudioStream **streamPP) {
         return result;
     }
 
+#ifndef OBOE_SUPPRESS_LOG_SPAM
     LOGI("%s() %s -------- %s --------",
          __func__, getDirection() == Direction::Input ? "INPUT" : "OUTPUT", getVersionText());
+#endif
 
     if (streamPP == nullptr) {
         return Result::ErrorNull;
@@ -117,7 +119,7 @@ Result AudioStreamBuilder::openStreamInternal(AudioStream **streamPP) {
     // Do we need to make a child stream and convert.
     if (conversionNeeded) {
         AudioStream *tempStream;
-        result = childBuilder.openStream(&tempStream);
+        result = childBuilder.openStreamInternal(&tempStream);
         if (result != Result::OK) {
             return result;
         }
@@ -144,7 +146,9 @@ Result AudioStreamBuilder::openStreamInternal(AudioStream **streamPP) {
 
             // Use childStream in a FilterAudioStream.
             LOGI("%s() create a FilterAudioStream for data conversion.", __func__);
-            FilterAudioStream *filterStream = new FilterAudioStream(parentBuilder, tempStream);
+            std::shared_ptr<AudioStream> childStream(tempStream);
+            FilterAudioStream *filterStream = new FilterAudioStream(parentBuilder, childStream);
+            childStream->setWeakThis(childStream);
             result = filterStream->configureFlowGraph();
             if (result !=  Result::OK) {
                 filterStream->close();
@@ -178,24 +182,26 @@ Result AudioStreamBuilder::openStreamInternal(AudioStream **streamPP) {
         AAudioExtensions::getInstance().setMMapEnabled(wasMMapOriginallyEnabled); // restore original
     }
     if (result == Result::OK) {
-
-        int32_t  optimalBufferSize = -1;
-        // Use a reasonable default buffer size.
-        if (streamP->getDirection() == Direction::Input) {
-            // For input, small size does not improve latency because the stream is usually
-            // run close to empty. And a low size can result in XRuns so always use the maximum.
-            optimalBufferSize = streamP->getBufferCapacityInFrames();
-        } else if (streamP->getPerformanceMode() == PerformanceMode::LowLatency
-                && streamP->getDirection() == Direction::Output)  { // Output check is redundant.
-            optimalBufferSize = streamP->getFramesPerBurst() *
-                                    kBufferSizeInBurstsForLowLatencyStreams;
-        }
-        if (optimalBufferSize >= 0) {
-            auto setBufferResult = streamP->setBufferSizeInFrames(optimalBufferSize);
-            if (!setBufferResult) {
-                LOGW("Failed to setBufferSizeInFrames(%d). Error was %s",
-                     optimalBufferSize,
-                     convertToText(setBufferResult.error()));
+        // AAudio supports setBufferSizeInFrames() so use it.
+        if (streamP->getAudioApi() == AudioApi::AAudio) {
+            int32_t  optimalBufferSize = -1;
+            // Use a reasonable default buffer size.
+            if (streamP->getDirection() == Direction::Input) {
+                // For input, small size does not improve latency because the stream is usually
+                // run close to empty. And a low size can result in XRuns so always use the maximum.
+                optimalBufferSize = streamP->getBufferCapacityInFrames();
+            } else if (streamP->getPerformanceMode() == PerformanceMode::LowLatency
+                    && streamP->getDirection() == Direction::Output)  { // Output check is redundant.
+                optimalBufferSize = streamP->getFramesPerBurst() *
+                                        kBufferSizeInBurstsForLowLatencyStreams;
+            }
+            if (optimalBufferSize >= 0) {
+                auto setBufferResult = streamP->setBufferSizeInFrames(optimalBufferSize);
+                if (!setBufferResult) {
+                    LOGW("Failed to setBufferSizeInFrames(%d). Error was %s",
+                         optimalBufferSize,
+                         convertToText(setBufferResult.error()));
+                }
             }
         }
 

@@ -13,6 +13,8 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
+
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
@@ -36,6 +38,7 @@ public  class AutomatedTestRunner extends LinearLayout implements Runnable {
     private int          mTestCount;
     private int          mPassCount;
     private int          mFailCount;
+    private int          mSkipCount;
     private TestAudioActivity  mActivity;
 
     private Thread            mAutoThread;
@@ -141,6 +144,9 @@ public  class AutomatedTestRunner extends LinearLayout implements Runnable {
     }
     public void incrementPassCount() {
         mPassCount++;
+    }
+    public void incrementSkipCount() {
+        mSkipCount++;
     }
     public void incrementTestCount() {
         mTestCount++;
@@ -286,6 +292,7 @@ public  class AutomatedTestRunner extends LinearLayout implements Runnable {
         mTestCount = 0;
         mPassCount = 0;
         mFailCount = 0;
+        mSkipCount = 0;
         try {
             mActivity.runTest();
             log("Tests finished.");
@@ -307,10 +314,7 @@ public  class AutomatedTestRunner extends LinearLayout implements Runnable {
             } else {
                 log("No tests were run!");
             }
-            int skipped = mTestCount - (mPassCount + mFailCount);
-            log(mPassCount + " passed. "
-                    + mFailCount + " failed. "
-                    + skipped + " skipped. ");
+            log(getPassFailReport());
             log("== FINISHED at " + new Date());
 
             flushLog();
@@ -325,6 +329,13 @@ public  class AutomatedTestRunner extends LinearLayout implements Runnable {
                 }
             });
         }
+    }
+
+    @NonNull
+    public String getPassFailReport() {
+        return  mPassCount + " passed. "
+                + mFailCount + " failed. "
+                + mSkipCount + " skipped. ";
     }
 
 }
