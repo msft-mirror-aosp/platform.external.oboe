@@ -465,6 +465,10 @@ public:
      * This can occur when a stream is disconnected because a headset is plugged in or unplugged.
      * It can also occur if the audio service fails or if an exclusive stream is stolen by
      * another stream.
+     * 
+     * Note that error callbacks will only be called when a data callback has been specified
+     * and the stream is started. If you are not using a data callback then the read(), write()
+     * and requestStart() methods will return errors if the stream is disconnected.
      *
      * <strong>Important: See AudioStreamCallback for restrictions on what may be called
      * from the callback methods.</strong>
@@ -498,6 +502,30 @@ public:
     AudioStreamBuilder *setErrorCallback(AudioStreamErrorCallback *errorCallback) {
         mErrorCallback = errorCallback;
         mSharedErrorCallback = nullptr;
+        return this;
+    }
+
+    /**
+     * Specifies an object to handle data presentation related callbacks from the underlying API.
+     * This can occur when all data queued in the audio system for an offload stream has been
+     * played.
+     *
+     * Note that presentation callbacks will only be called when a data callback has been specified
+     * and the stream is started.
+     *
+     * <strong>Important: See AudioStreamCallback for restrictions on what may be called
+     * from the callback methods.</strong>
+     *
+     * We pass a shared_ptr so that the presentationCallback object cannot be deleted before the
+     * stream is deleted. If the stream was created using a shared_ptr then the stream cannot be
+     * deleted before the presentation callback has finished running.
+     *
+     * @param sharedPresentationCallback
+     * @return pointer to the builder so calls can be chained
+     */
+    AudioStreamBuilder *setPresentationCallback(
+            std::shared_ptr<AudioStreamPresentationCallback> sharedPresentationCallback) {
+        mSharedPresentationCallback = sharedPresentationCallback;
         return this;
     }
 
@@ -556,7 +584,7 @@ public:
      *
      * If you do the conversion in Oboe then you might still get a low latency stream.
      *
-     * Default is SampleRateConversionQuality::None
+     * Default is SampleRateConversionQuality::Medium
      */
     AudioStreamBuilder *setSampleRateConversionQuality(SampleRateConversionQuality quality) {
         mSampleRateConversionQuality = quality;
