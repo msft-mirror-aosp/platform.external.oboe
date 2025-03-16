@@ -31,6 +31,7 @@
 #include "TestColdStartLatency.h"
 #include "TestErrorCallback.h"
 #include "TestRoutingCrash.h"
+#include "TestRapidCycle.h"
 
 static NativeAudioContext engine;
 
@@ -58,7 +59,8 @@ Java_com_mobileer_oboetester_OboeAudioStream_openNative(JNIEnv *env, jobject,
                                                        jboolean formatConversionAllowed,
                                                        jint rateConversionQuality,
                                                        jboolean isMMap,
-                                                       jboolean isInput);
+                                                       jboolean isInput,
+                                                       jint spatializationBehavior);
 JNIEXPORT void JNICALL
 Java_com_mobileer_oboetester_OboeAudioStream_close(JNIEnv *env, jobject, jint);
 
@@ -123,10 +125,17 @@ Java_com_mobileer_oboetester_NativeEngine_getCpuCount(JNIEnv *env, jclass type) 
 }
 
 JNIEXPORT void JNICALL
-        Java_com_mobileer_oboetester_NativeEngine_setCpuAffinityMask(JNIEnv *env,
+Java_com_mobileer_oboetester_NativeEngine_setCpuAffinityMask(JNIEnv *env,
                                                                      jclass type,
                                                                      jint mask) {
     engine.getCurrentActivity()->setCpuAffinityMask(mask);
+}
+
+JNIEXPORT void JNICALL
+Java_com_mobileer_oboetester_NativeEngine_setWorkloadReportingEnabled(JNIEnv *env,
+                                                             jclass type,
+                                                             jboolean enabled) {
+    engine.getCurrentActivity()->setWorkloadReportingEnabled(enabled);
 }
 
 JNIEXPORT jint JNICALL
@@ -149,7 +158,8 @@ Java_com_mobileer_oboetester_OboeAudioStream_openNative(
         jboolean formatConversionAllowed,
         jint rateConversionQuality,
         jboolean isMMap,
-        jboolean isInput) {
+        jboolean isInput,
+        jint spatializationBehavior) {
     LOGD("OboeAudioStream_openNative: sampleRate = %d", sampleRate);
 
     return (jint) engine.getCurrentActivity()->open(nativeApi,
@@ -169,7 +179,8 @@ Java_com_mobileer_oboetester_OboeAudioStream_openNative(
                                                     formatConversionAllowed,
                                                     rateConversionQuality,
                                                     isMMap,
-                                                    isInput);
+                                                    isInput,
+                                                    spatializationBehavior);
 }
 
 JNIEXPORT jint JNICALL
@@ -214,7 +225,7 @@ Java_com_mobileer_oboetester_OboeAudioStream_close(JNIEnv *env, jobject, jint st
 
 JNIEXPORT void JNICALL
 Java_com_mobileer_oboetester_TestAudioActivity_setUseAlternativeAdpf(JNIEnv *env, jobject, jboolean enabled) {
-    AdpfWrapper::setUseAlternative(enabled);
+    oboe::AdpfWrapper::setUseAlternative(enabled);
 }
 
 JNIEXPORT jint JNICALL
@@ -327,6 +338,17 @@ Java_com_mobileer_oboetester_OboeAudioStream_getInputPreset(
     std::shared_ptr<oboe::AudioStream> oboeStream = engine.getCurrentActivity()->getStream(streamIndex);
     if (oboeStream != nullptr) {
         result = (jint) oboeStream->getInputPreset();
+    }
+    return result;
+}
+
+JNIEXPORT jint JNICALL
+Java_com_mobileer_oboetester_OboeAudioStream_getSpatializationBehavior(
+        JNIEnv *env, jobject, jint streamIndex) {
+    jint result = (jint) oboe::Result::ErrorNull;
+    std::shared_ptr<oboe::AudioStream> oboeStream = engine.getCurrentActivity()->getStream(streamIndex);
+    if (oboeStream != nullptr) {
+        result = (jint) oboeStream->getSpatializationBehavior();
     }
     return result;
 }
@@ -978,4 +1000,22 @@ Java_com_mobileer_oboetester_TestColdStartLatencyActivity_getAudioDeviceId(
     return sColdStartLatency.getDeviceId();
 }
 
+static TestRapidCycle sRapidCycle;
+
+JNIEXPORT jint JNICALL
+Java_com_mobileer_oboetester_TestRapidCycleActivity_startRapidCycleTest(JNIEnv *env, jobject thiz,
+                                                                        jboolean use_open_sl) {
+    return sRapidCycle.start(use_open_sl);
 }
+
+JNIEXPORT jint JNICALL
+Java_com_mobileer_oboetester_TestRapidCycleActivity_stopRapidCycleTest(JNIEnv *env, jobject thiz) {
+    return sRapidCycle.stop();
+}
+
+JNIEXPORT jint JNICALL
+Java_com_mobileer_oboetester_TestRapidCycleActivity_getCycleCount(JNIEnv *env, jobject thiz) {
+    return sRapidCycle.getCycleCount();
+}
+
+} // extern "C"

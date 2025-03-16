@@ -100,11 +100,28 @@ public:
         mAdpfOpenAttempted = false;
     }
 
+    oboe::Result reportWorkload(int32_t appWorkload) override {
+        if (!isPerformanceHintEnabled()) {
+            return oboe::Result::ErrorInvalidState;
+        }
+        mAdpfWrapper.reportWorkload(appWorkload);
+        return oboe::Result::OK;
+    }
+
+    Result setOffloadDelayPadding(int32_t delayInFrames, int32_t paddingInFrames) override;
+    ResultWithValue<int32_t> getOffloadDelay() override;
+    ResultWithValue<int32_t> getOffloadPadding() override;
+    Result setOffloadEndOfStream() override;
+
 protected:
     static void internalErrorCallback(
             AAudioStream *stream,
             void *userData,
             aaudio_result_t error);
+
+    static void internalPresentationEndCallback(
+            AAudioStream *stream,
+            void *userData);
 
     void *getUnderlyingStream() const override {
         return mAAudioStream.load();
