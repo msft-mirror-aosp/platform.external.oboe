@@ -16,8 +16,6 @@
 
 package com.mobileer.oboetester;
 
-import android.content.res.Resources;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -56,6 +54,7 @@ public class StreamConfiguration {
     public static final int PERFORMANCE_MODE_NONE = 10; // must match AAUDIO
     public static final int PERFORMANCE_MODE_POWER_SAVING = 11; // must match AAUDIO
     public static final int PERFORMANCE_MODE_LOW_LATENCY = 12; // must match AAUDIO
+    public static final int PERFORMANCE_MODE_POWER_SAVING_OFFLOAD = 13; // must match AAUDIO
 
     public static final int RATE_CONVERSION_QUALITY_NONE = 0; // must match Oboe
     public static final int RATE_CONVERSION_QUALITY_FASTEST = 1; // must match Oboe
@@ -73,6 +72,9 @@ public class StreamConfiguration {
     public static final int INPUT_PRESET_VOICE_COMMUNICATION = 7; // must match Oboe
     public static final int INPUT_PRESET_UNPROCESSED = 9; // must match Oboe
     public static final int INPUT_PRESET_VOICE_PERFORMANCE = 10; // must match Oboe
+
+    public static final int SPATIALIZATION_BEHAVIOR_AUTO = 1; // must match Oboe
+    public static final int SPATIALIZATION_BEHAVIOR_NEVER = 2; // must match Oboe
 
     public static final int ERROR_BASE = -900; // must match Oboe
     public static final int ERROR_DISCONNECTED = -899; // must match Oboe
@@ -300,6 +302,7 @@ public class StreamConfiguration {
     private int mHardwareChannelCount;
     private int mHardwareSampleRate;
     private int mHardwareFormat;
+    private int mSpatializationBehavior;
 
     public StreamConfiguration() {
         reset();
@@ -353,6 +356,7 @@ public class StreamConfiguration {
         mHardwareChannelCount = UNSPECIFIED;
         mHardwareSampleRate = UNSPECIFIED;
         mHardwareFormat = UNSPECIFIED;
+        mSpatializationBehavior = UNSPECIFIED;
     }
 
     public int getFramesPerBurst() {
@@ -403,6 +407,8 @@ public class StreamConfiguration {
                 return "PS";
             case PERFORMANCE_MODE_LOW_LATENCY:
                 return "LL";
+            case PERFORMANCE_MODE_POWER_SAVING_OFFLOAD:
+                return "PSO";
             default:
                 return "??";
         }
@@ -411,6 +417,11 @@ public class StreamConfiguration {
     public int getInputPreset() { return mInputPreset; }
     public void setInputPreset(int inputPreset) {
         this.mInputPreset = inputPreset;
+    }
+
+    public int getSpatializationBehavior() { return mSpatializationBehavior; }
+    public void setSpatializationBehavior(int spatializationBehavior) {
+        this.mSpatializationBehavior = spatializationBehavior;
     }
 
     public int getUsage() { return mUsage; }
@@ -642,6 +653,8 @@ public class StreamConfiguration {
         message.append(String.format(Locale.getDefault(), "%s.hardware.sampleRate = %d\n", prefix, mHardwareSampleRate));
         message.append(String.format(Locale.getDefault(), "%s.hardware.format = %s\n", prefix,
                 convertFormatToText(mHardwareFormat).toLowerCase(Locale.getDefault())));
+        message.append(String.format(Locale.getDefault(), "%s.spatializationBehavior = %s\n", prefix,
+                convertSpatializationBehaviorToText(mSpatializationBehavior).toLowerCase(Locale.getDefault())));
         return message.toString();
     }
 
@@ -695,6 +708,45 @@ public class StreamConfiguration {
             return INPUT_PRESET_UNPROCESSED;
         } else if (matchInputPreset(text, INPUT_PRESET_VOICE_PERFORMANCE)) {
             return INPUT_PRESET_VOICE_PERFORMANCE;
+        }
+        return -1;
+    }
+
+    // text must match menu values
+    public static final String NAME_SPATIALIZATION_BEHAVIOR_UNSPECIFIED = "Unspecified";
+    public static final String NAME_SPATIALIZATION_BEHAVIOR_AUTO = "Auto";
+    public static final String NAME_SPATIALIZATION_BEHAVIOR_NEVER = "Never";
+
+    public static String convertSpatializationBehaviorToText(int spatializationBehavior) {
+        switch(spatializationBehavior) {
+            case UNSPECIFIED:
+                return NAME_SPATIALIZATION_BEHAVIOR_UNSPECIFIED;
+            case SPATIALIZATION_BEHAVIOR_AUTO:
+                return NAME_SPATIALIZATION_BEHAVIOR_AUTO;
+            case SPATIALIZATION_BEHAVIOR_NEVER:
+                return NAME_SPATIALIZATION_BEHAVIOR_NEVER;
+            default:
+                return "Invalid";
+        }
+    }
+
+    private static boolean matchSpatializationBehavior(String text, int spatializationBehavior) {
+        return convertSpatializationBehaviorToText(spatializationBehavior).toLowerCase(Locale.getDefault()).equals(text);
+    }
+
+    /**
+     * Case insensitive.
+     * @param text
+     * @return spatializationBehavior, eg. SPATIALIZATION_BEHAVIOR_NEVER
+     */
+    public static int convertTextToSpatializationBehavior(String text) {
+        text = text.toLowerCase(Locale.getDefault());
+        if (matchSpatializationBehavior(text, UNSPECIFIED)) {
+            return UNSPECIFIED;
+        } else if (matchSpatializationBehavior(text, SPATIALIZATION_BEHAVIOR_AUTO)) {
+            return SPATIALIZATION_BEHAVIOR_AUTO;
+        } else if (matchSpatializationBehavior(text, SPATIALIZATION_BEHAVIOR_NEVER)) {
+            return SPATIALIZATION_BEHAVIOR_NEVER;
         }
         return -1;
     }
