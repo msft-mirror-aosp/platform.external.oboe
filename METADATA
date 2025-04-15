@@ -1,14 +1,18 @@
+# This project was upgraded with external_updater.
+# Usage: tools/external_updater/updater.sh update external/oboe
+# For more info, check https://cs.android.com/android/platform/superproject/main/+/main:tools/external_updater/README.md
+
 name: "Oboe"
 description: "Native audio API for Android that calls AAudio or OpenSL ES."
 third_party {
-  url {
-    type: GIT
-    value: "https://github.com/google/oboe"
-  }
-  version: "1.7.0"
   last_upgrade_date {
-    year: 2022
-    month: 12
-    day: 14
+    year: 2025
+    month: 4
+    day: 15
+  }
+  identifier {
+    type: "Git"
+    value: "https://github.com/google/oboe"
+    version: "56c587a79cd9081d006a5021aba1522fc01faf2d"
   }
 }
