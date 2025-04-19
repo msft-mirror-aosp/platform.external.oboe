@@ -25,6 +25,7 @@
 #include "oboe/ResultWithValue.h"
 #include "oboe/AudioStreamBuilder.h"
 #include "oboe/AudioStreamBase.h"
+#include "oboe/Utilities.h"
 
 namespace oboe {
 
@@ -242,13 +243,19 @@ public:
      * and the sample format. For example, a 2 channel floating point stream will have
      * 2 * 4 = 8 bytes per frame.
      *
+     * Note for compressed formats, bytes per frames is treated as 1 by convention.
+     *
      * @return number of bytes in each audio frame.
      */
-    int32_t getBytesPerFrame() const { return mChannelCount * getBytesPerSample(); }
+    int32_t getBytesPerFrame() const {
+        return isCompressedFormat(mFormat) ? 1 : mChannelCount * getBytesPerSample(); }
 
     /**
      * Get the number of bytes per sample. This is calculated using the sample format. For example,
      * a stream using 16-bit integer samples will have 2 bytes per sample.
+     *
+     * Note for compressed formats, they may not have a fixed bytes per sample. In that case,
+     * this method will return 0 for compressed format.
      *
      * @return the number of bytes per sample.
      */
@@ -568,14 +575,12 @@ public:
      * @param appWorkload workload in application units, such as number of voices
      * @return OK or an error such as ErrorInvalidState if the PerformanceHint was not enabled.
      */
-    virtual oboe::Result reportWorkload(int32_t appWorkload) {
-        std::ignore = appWorkload;
+    virtual oboe::Result reportWorkload([[maybe_unused]] int32_t appWorkload) {
         return oboe::Result::ErrorUnimplemented;
     }
 
-    virtual oboe::Result setOffloadDelayPadding(int32_t delayInFrames, int32_t paddingInFrames) {
-        std::ignore = delayInFrames;
-        std::ignore = paddingInFrames;
+    virtual oboe::Result setOffloadDelayPadding([[maybe_unused]] int32_t delayInFrames,
+                                                [[maybe_unused]] int32_t paddingInFrames) {
         return Result::ErrorUnimplemented;
     }
 

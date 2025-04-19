@@ -19,6 +19,7 @@
 #include <cassert>
 #include <cstring>
 #include <jni.h>
+#include <memory>
 #include <stdint.h>
 #include <sys/sysinfo.h>
 #include <thread>
@@ -211,6 +212,16 @@ Java_com_mobileer_oboetester_TestAudioActivity_releaseNative(JNIEnv *env, jobjec
 JNIEXPORT jint JNICALL
 Java_com_mobileer_oboetester_TestAudioActivity_getFramesPerCallback(JNIEnv *env, jobject) {
     return (jint) engine.getCurrentActivity()->getFramesPerCallback();
+}
+
+JNIEXPORT void JNICALL
+Java_com_mobileer_oboetester_TestAudioActivity_setupMemoryBuffer(JNIEnv *env, jobject thiz,
+                                                                 jbyteArray buffer, jint offset,
+                                                                 jint length) {
+    auto buf = std::make_unique<uint8_t[]>(length);
+
+    env->GetByteArrayRegion(buffer, offset, length, reinterpret_cast<jbyte *>(buf.get()));
+    engine.getCurrentActivity()->setupMemoryBuffer(buf, length);
 }
 
 JNIEXPORT jint JNICALL
@@ -457,6 +468,29 @@ Java_com_mobileer_oboetester_OboeAudioStream_getDeviceId(
         result = oboeStream->getDeviceId();
     }
     return result;
+}
+
+JNIEXPORT jintArray JNICALL
+Java_com_mobileer_oboetester_OboeAudioStream_getDeviceIds(
+        JNIEnv *env, jobject, jint streamIndex) {
+    std::shared_ptr<oboe::AudioStream> oboeStream = engine.getCurrentActivity()->getStream(streamIndex);
+    if (oboeStream != nullptr) {
+        std::vector<int32_t> deviceIds = oboeStream->getDeviceIds();
+        jsize length = deviceIds.size();
+        jintArray result = env->NewIntArray(length);
+
+        if (result == nullptr) {
+            return nullptr;
+        }
+
+        if (length > 0) {
+            env->SetIntArrayRegion(result, 0, length,
+                                   reinterpret_cast<jint*>(deviceIds.data()));
+        }
+
+        return result;
+    }
+    return nullptr;
 }
 
 JNIEXPORT jint JNICALL

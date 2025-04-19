@@ -16,7 +16,12 @@
 
 package com.mobileer.oboetester;
 
+import android.text.TextUtils;
+
+import androidx.annotation.Nullable;
+
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -44,6 +49,7 @@ public class StreamConfiguration {
     public static final int AUDIO_FORMAT_PCM_24 = 3; // must match AAUDIO
     public static final int AUDIO_FORMAT_PCM_32 = 4; // must match AAUDIO
     public static final int AUDIO_FORMAT_IEC61937 = 5; // must match AAUDIO
+    public static final int AUDIO_FORMAT_MP3 = 6; // must match AAUDIO
 
     public static final int DIRECTION_OUTPUT = 0; // must match AAUDIO
     public static final int DIRECTION_INPUT = 1; // must match AAUDIO
@@ -275,6 +281,10 @@ public class StreamConfiguration {
             CHANNEL_FRONT_BACK
     };
 
+    public static boolean isCompressedFormat(int format) {
+        return format == AUDIO_FORMAT_MP3;
+    }
+
     private static HashMap<String,Integer> mUsageStringToIntegerMap;
     private static HashMap<String,Integer> mContentTypeStringToIntegerMap;
     private static HashMap<String,Integer> mChannelMaskStringToIntegerMap;
@@ -284,6 +294,7 @@ public class StreamConfiguration {
     private int mBufferCapacityInFrames;
     private int mChannelCount;
     private int mDeviceId;
+    @Nullable private int[] mDeviceIds;
     private int mSessionId;
     private int mDirection; // does not get reset
     private int mFormat;
@@ -341,6 +352,7 @@ public class StreamConfiguration {
         mChannelCount = UNSPECIFIED;
         mChannelMask = UNSPECIFIED;
         mDeviceId = UNSPECIFIED;
+        mDeviceIds = new int[0];
         mSessionId = -1;
         mFormat = AUDIO_FORMAT_PCM_FLOAT;
         mSampleRate = UNSPECIFIED;
@@ -525,6 +537,8 @@ public class StreamConfiguration {
                 return "Float";
             case AUDIO_FORMAT_IEC61937:
                 return "IEC61937";
+            case AUDIO_FORMAT_MP3:
+                return "MP3";
             default:
                 return "Invalid";
         }
@@ -647,6 +661,7 @@ public class StreamConfiguration {
                 convertNativeApiToText(getNativeApi()).toLowerCase(Locale.getDefault())));
         message.append(String.format(Locale.getDefault(), "%s.rate = %d\n", prefix, mSampleRate));
         message.append(String.format(Locale.getDefault(), "%s.device = %d\n", prefix, mDeviceId));
+        message.append(String.format(Locale.getDefault(), "%s.devices = %s\n", prefix, convertDeviceIdsToText(mDeviceIds)));
         message.append(String.format(Locale.getDefault(), "%s.mmap = %s\n", prefix, isMMap() ? "yes" : "no"));
         message.append(String.format(Locale.getDefault(), "%s.rate.conversion.quality = %d\n", prefix, mRateConversionQuality));
         message.append(String.format(Locale.getDefault(), "%s.hardware.channels = %d\n", prefix, mHardwareChannelCount));
@@ -775,6 +790,14 @@ public class StreamConfiguration {
         this.mDeviceId = deviceId;
     }
 
+    public int[] getDeviceIds() {
+        return mDeviceIds;
+    }
+
+    public void setDeviceIds(int[] deviceIds) {
+        this.mDeviceIds = deviceIds;
+    }
+
     public int getSessionId() {
         return mSessionId;
     }
@@ -896,5 +919,19 @@ public class StreamConfiguration {
             default:
                 return "?=" + error;
         }
+    }
+
+    public static String convertDeviceIdsToText(int[] deviceIds) {
+        if (deviceIds == null || deviceIds.length == 0) {
+            return "[]";
+        }
+
+        List<String> deviceIdStrings = new ArrayList<>();
+        for (int deviceId : deviceIds) {
+            deviceIdStrings.add(String.valueOf(deviceId));
+        }
+
+        String joinedIds = TextUtils.join(",", deviceIdStrings);
+        return "[" + joinedIds + "]";
     }
 }
