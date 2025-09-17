@@ -122,6 +122,14 @@ public:
 
     /**
      * For internal use only.
+     * @return the partial data callback object for this stream, if set.
+     */
+    AudioStreamPartialDataCallback* getPartialDataCallback() const {
+        return mPartialDataCallback;
+    }
+
+    /**
+     * For internal use only.
      * @return the error callback object for this stream, if set.
      */
     AudioStreamErrorCallback *getErrorCallback() const {
@@ -141,6 +149,20 @@ public:
      */
     bool isDataCallbackSpecified() const {
         return mDataCallback != nullptr;
+    }
+
+    /**
+     * @return true if a partial data callback was set for this stream
+     */
+    bool isPartialDataCallbackSpecified() const {
+        return mPartialDataCallback != nullptr;
+    }
+
+    /**
+     * @return true if a data callback or a partial data callback was set for this stream
+     */
+    bool anyDataCallbackSpecified() const {
+        return isDataCallbackSpecified() || isPartialDataCallbackSpecified();
     }
 
     /**
@@ -215,6 +237,28 @@ public:
     PrivacySensitiveMode getPrivacySensitiveMode() const { return mPrivacySensitiveMode; }
 
     /**
+     * Return the stream's package name
+     *
+     * See AudioStreamBuilder_setPackageName().
+     *
+     * Added in API level 31 to AAudio.
+     *
+     * @return packageName
+     */
+    std::string getPackageName() const { return mPackageName; }
+
+    /**
+     * Return the stream's attribution tag
+     *
+     * See AudioStreamBuilder_setAttributionTag().
+     *
+     * Added in API level 31 to AAudio.
+     *
+     * @return attributionTag
+     */
+    std::string getAttributionTag() const { return mAttributionTag; }
+
+    /**
      * @return true if Oboe can convert channel counts to achieve optimal results.
      */
     bool isChannelConversionAllowed() const {
@@ -261,6 +305,10 @@ protected:
     /** The callback which will be fired when new data is ready to be read/written. **/
     AudioStreamDataCallback        *mDataCallback = nullptr;
     std::shared_ptr<AudioStreamDataCallback> mSharedDataCallback;
+
+    /** The partial data callback which will be fired when new data is ready to be read/written. **/
+    AudioStreamPartialDataCallback  *mPartialDataCallback = nullptr;
+    std::shared_ptr<AudioStreamPartialDataCallback> mSharedPartialDataCallback;
 
     /** The callback which will be fired when an error or a disconnect occurs. **/
     AudioStreamErrorCallback       *mErrorCallback = nullptr;

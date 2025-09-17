@@ -34,6 +34,8 @@ import android.widget.CheckBox;
 import android.widget.Spinner;
 import android.widget.TextView;
 
+import androidx.core.view.WindowCompat;
+
 /**
  * Select various Audio tests.
  */
@@ -62,12 +64,15 @@ public class MainActivity extends BaseOboeTesterActivity {
     private CheckBox mWorkaroundsCheckBox;
     private CheckBox mBackgroundCheckBox;
     private CheckBox mForegroundServiceCheckBox;
+    private CheckBox mUseCallbackCheckBox;
+    private CheckBox mUsePartialDataCallbackCheckBox;
     private static String mVersionText;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
 
         logScreenSize();
 
@@ -113,7 +118,14 @@ public class MainActivity extends BaseOboeTesterActivity {
         NativeEngine.setWorkaroundsEnabled(false);
 
         mBackgroundCheckBox = (CheckBox) findViewById(R.id.boxEnableBackground);
+        mBackgroundCheckBox.setChecked(true);
         mForegroundServiceCheckBox = (CheckBox) findViewById(R.id.boxEnableForegroundService);
+        mForegroundServiceCheckBox.setChecked(true);
+
+        mUseCallbackCheckBox = (CheckBox) findViewById(R.id.useCallback);
+        mUsePartialDataCallbackCheckBox = (CheckBox) findViewById(R.id.usePartialDataCallback);
+        mUsePartialDataCallbackCheckBox.setChecked(false);
+        OboeAudioStream.setUsePartialDataCallback(false);
 
         mBuildTextView = (TextView) findViewById(R.id.text_build_info);
         mBuildTextView.setText(Build.DISPLAY
@@ -160,11 +172,11 @@ public class MainActivity extends BaseOboeTesterActivity {
 
     private void setTogglesFromIntent() {
         boolean backgroundEnabled = mBundleFromIntent.getBoolean(
-                IntentBasedTestSupport.KEY_BACKGROUND, false);
+                IntentBasedTestSupport.KEY_BACKGROUND, true);
         TestAudioActivity.setBackgroundEnabled(backgroundEnabled);
         boolean foregroundServiceEnabled = mBundleFromIntent.getBoolean(
-                IntentBasedTestSupport.KEY_FOREGROUND_SERVICE, false);
-        TestAudioActivity.setBackgroundEnabled(foregroundServiceEnabled);
+                IntentBasedTestSupport.KEY_FOREGROUND_SERVICE, true);
+        TestAudioActivity.setForegroundServiceEnabled(foregroundServiceEnabled);
     }
 
     private Intent getTestIntent(Bundle bundle) {
@@ -276,6 +288,21 @@ public class MainActivity extends BaseOboeTesterActivity {
     public void onUseCallbackClicked(View view) {
         CheckBox checkBox = (CheckBox) view;
         OboeAudioStream.setUseCallback(checkBox.isChecked());
+        if (!checkBox.isChecked()) {
+            mUsePartialDataCallbackCheckBox.setChecked(false);
+            OboeAudioStream.setUsePartialDataCallback(false);
+        }
+    }
+
+    public void onUsePartialDataCallbackClicked(View view) {
+        CheckBox checkBox = (CheckBox) view;
+        OboeAudioStream.setUsePartialDataCallback(checkBox.isChecked());
+        if (checkBox.isChecked()) {
+            // When partial data callback is checked, also check use callback to ensure
+            // data callback is used.
+            mUseCallbackCheckBox.setChecked(true);
+            OboeAudioStream.setUseCallback(true);
+        }
     }
 
     private void updateCallbackSize() {

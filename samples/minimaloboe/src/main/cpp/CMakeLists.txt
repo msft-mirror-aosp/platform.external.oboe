@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 
-cmake_minimum_required(VERSION 3.4.1)
+cmake_minimum_required(VERSION 3.22.1)
 
 # Set the path to the Oboe library directory
 set (OBOE_DIR ../../../../../)
@@ -41,7 +41,7 @@ add_library(minimaloboe SHARED
 
 # Enable optimization flags: if having problems with source level debugging,
 # disable -Ofast ( and debug ), re-enable after done debugging.
-target_compile_options(minimaloboe PRIVATE -Wall -Werror "$<$<CONFIG:RELEASE>:-Ofast>")
+target_compile_options(minimaloboe PRIVATE -Wall -Werror "$<$<CONFIG:RELEASE>:-O3 -ffast-math>")
 
 target_link_libraries( # Specifies the target library.
         minimaloboe

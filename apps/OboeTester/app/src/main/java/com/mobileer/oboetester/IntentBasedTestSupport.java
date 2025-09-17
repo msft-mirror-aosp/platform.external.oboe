@@ -31,6 +31,7 @@ public class IntentBasedTestSupport {
     public static final String VALUE_PERF_LOW_LATENCY = "lowlat";
     public static final String VALUE_PERF_POWERSAVE = "powersave";
     public static final String VALUE_PERF_NONE = "none";
+    public static final String VALUE_PERF_POWERSAVE_OFFLOAD = "powersave_offload";
 
     public static final String KEY_IN_CHANNELS = "in_channels";
     public static final String KEY_OUT_CHANNELS = "out_channels";
@@ -59,9 +60,11 @@ public class IntentBasedTestSupport {
 
     public static final String KEY_FILE_NAME = "file";
     public static final String KEY_BUFFER_BURSTS = "buffer_bursts";
+    public static final String KEY_BUFFER_FRAMES = "buffer_frames";
     public static final String KEY_BACKGROUND = "background";
     public static final String KEY_FOREGROUND_SERVICE = "foreground_service";
     public static final String KEY_VOLUME = "volume";
+    public static final String KEY_RESTART_STREAM_IF_CLOSED = "restart_if_closed";
 
     public static final String KEY_VOLUME_TYPE = "volume_type";
     public static final float VALUE_VOLUME_INVALID = -1.0f;
@@ -116,6 +119,17 @@ public class IntentBasedTestSupport {
     public static final String KEY_DURATION = "duration";
     public static final int VALUE_DEFAULT_DURATION = 10;
 
+    public static final String KEY_OUT_FORMAT = "out_format";
+    public static final String KEY_IN_FORMAT = "in_format";
+    public static final String VALUE_FORMAT_PCM_16_BIT = "pcm_16_bit";
+    public static final String VALUE_FORMAT_PCM_FLOAT = "pcm_float";
+    public static final String VALUE_FORMAT_PCM_24_BIT = "pcm_24_bit";
+    public static final String VALUE_FORMAT_PCM_32_BIT = "pcm_32_bit";
+    public static final String VALUE_FORMAT_IEC61937 = "iec61937";
+    public static final String VALUE_FORMAT_MP3 = "mp3";
+
+    public static final String KEY_BUFFER_CAPACITY = "buffer_capacity";
+
     public static int getApiFromText(String text) {
         if (VALUE_API_AAUDIO.equals(text)) {
             return StreamConfiguration.NATIVE_API_AAUDIO;
@@ -133,6 +147,8 @@ public class IntentBasedTestSupport {
             return StreamConfiguration.PERFORMANCE_MODE_POWER_SAVING;
         } else if (VALUE_PERF_LOW_LATENCY.equals(text)) {
             return StreamConfiguration.PERFORMANCE_MODE_LOW_LATENCY;
+        } else if (VALUE_PERF_POWERSAVE_OFFLOAD.equals(text)) {
+            return StreamConfiguration.PERFORMANCE_MODE_POWER_SAVING_OFFLOAD;
         } else {
             throw new IllegalArgumentException("perf mode invalid: " + text);
         }
@@ -266,6 +282,24 @@ public class IntentBasedTestSupport {
         }
     }
 
+    public static int getFormatFromText(String text) {
+        if (VALUE_FORMAT_PCM_16_BIT.equals(text)) {
+            return StreamConfiguration.AUDIO_FORMAT_PCM_16;
+        } else if (VALUE_FORMAT_PCM_FLOAT.equals(text)) {
+            return StreamConfiguration.AUDIO_FORMAT_PCM_FLOAT;
+        } else if (VALUE_FORMAT_PCM_24_BIT.equals(text)) {
+            return StreamConfiguration.AUDIO_FORMAT_PCM_24;
+        } else if (VALUE_FORMAT_PCM_32_BIT.equals(text)) {
+            return StreamConfiguration.AUDIO_FORMAT_PCM_32;
+        } else if (VALUE_FORMAT_IEC61937.equals(text)) {
+            return StreamConfiguration.AUDIO_FORMAT_IEC61937;
+        } else if (VALUE_FORMAT_MP3.equals(text)) {
+            return StreamConfiguration.AUDIO_FORMAT_MP3;
+        } else {
+            return StreamConfiguration.UNSPECIFIED;
+        }
+    }
+
     public static void configureOutputStreamFromBundle(Bundle bundle,
                                                         StreamConfiguration requestedOutConfig) {
         int audioApi;
@@ -304,7 +338,11 @@ public class IntentBasedTestSupport {
         int usage = getUsageFromText(text);
         requestedOutConfig.setUsage(usage);
 
+        text = bundle.getString(KEY_OUT_FORMAT, "");
+        requestedOutConfig.setFormat(getFormatFromText(text));
 
+        int bufferCapacity = bundle.getInt(KEY_BUFFER_CAPACITY, 0);
+        requestedOutConfig.setBufferCapacityInFrames(bufferCapacity);
     }
 
     public static void configureInputStreamFromBundle(Bundle bundle,
@@ -347,6 +385,12 @@ public class IntentBasedTestSupport {
         int inputPreset = StreamConfiguration.convertTextToInputPreset(text);
         if (inputPreset < 0) throw new IllegalArgumentException(KEY_IN_PRESET + " invalid: " + text);
         requestedInConfig.setInputPreset(inputPreset);
+
+        text = bundle.getString(KEY_IN_FORMAT, "");
+        requestedInConfig.setFormat(getFormatFromText(text));
+
+        int bufferCapacity = bundle.getInt(KEY_BUFFER_CAPACITY, 0);
+        requestedInConfig.setBufferCapacityInFrames(bufferCapacity);
     }
 
     public static int getSignalTypeFromBundle(Bundle bundle) {
@@ -373,5 +417,13 @@ public class IntentBasedTestSupport {
 
     public static int getDurationSeconds(Bundle bundle) {
         return bundle.getInt(KEY_DURATION, VALUE_DEFAULT_DURATION);
+    }
+
+    public static int getBurstCount(Bundle bundle) {
+        return bundle.getInt(KEY_BUFFER_BURSTS, 0);
+    }
+
+    public static int getBufferFrameCount(Bundle bundle) {
+        return bundle.getInt(KEY_BUFFER_FRAMES, 0);
     }
 }

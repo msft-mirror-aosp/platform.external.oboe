@@ -195,6 +195,16 @@ int AAudioLoader::open() {
         stream_setOffloadEndOfStream = load_I_PS("AAudioStream_setOffloadEndOfStream");
 
         stream_getDeviceIds = load_I_PSPIPI("AAudioStream_getDeviceIds");
+
+        // TODO: Use 25Q4 version code and name when it is defined.
+        stream_flushFromFrame = load_I_PSIPL("AAudioStream_flushFromFrame");
+        stream_getPlaybackParameters =
+                load_I_PSPM("AAudioStream_getPlaybackParameters");
+        stream_setPlaybackParameters =
+                load_I_PSCPM("AAudioStream_setPlaybackParameters");
+
+        builder_setPartialDataCallback =
+                load_V_PBPDPV("AAudioStreamBuilder_setPartialDataCallback");
     }
 
     return 0;
@@ -360,6 +370,24 @@ AAudioLoader::signature_I_PSPIPI AAudioLoader::load_I_PSPIPI(const char *functio
     void *proc = dlsym(mLibHandle, functionName);
     AAudioLoader_check(proc, functionName);
     return reinterpret_cast<signature_I_PSPIPI>(proc);
+}
+
+AAudioLoader::signature_I_PSIPL AAudioLoader::load_I_PSIPL(const char *functionName) {
+    void *proc = dlsym(mLibHandle, functionName);
+    AAudioLoader_check(proc, functionName);
+    return reinterpret_cast<signature_I_PSIPL>(proc);
+}
+
+AAudioLoader::signature_I_PSPM AAudioLoader::load_I_PSPM(const char *functionName) {
+    void *proc = dlsym(mLibHandle, functionName);
+    AAudioLoader_check(proc, functionName);
+    return reinterpret_cast<signature_I_PSPM>(proc);
+}
+
+AAudioLoader::signature_I_PSCPM AAudioLoader::load_I_PSCPM(const char *functionName) {
+    void *proc = dlsym(mLibHandle, functionName);
+    AAudioLoader_check(proc, functionName);
+    return reinterpret_cast<signature_I_PSCPM>(proc);
 }
 
 // Ensure that all AAudio primitive data types are int32_t
@@ -557,9 +585,9 @@ AAudioLoader::signature_I_PSPIPI AAudioLoader::load_I_PSPIPI(const char *functio
 
 #endif
 
-// The aaudio device type and aaudio policy were added in NDK 28,
-// which is the first version to support Android W (API 36).
-#if __NDK_MAJOR__ >= 29
+// The aaudio device type and aaudio policy were added in NDK 29,
+// which is the first version to support Android B (API 36).
+#if __NDK_MAJOR__ >= 30
 
     ASSERT_INT32(AAudio_DeviceType);
     static_assert((int32_t)DeviceType::BuiltinEarpiece == AAUDIO_DEVICE_BUILTIN_EARPIECE, ERRMSG);
@@ -599,7 +627,7 @@ AAudioLoader::signature_I_PSPIPI AAudioLoader::load_I_PSPIPI(const char *functio
     static_assert((int32_t)MMapPolicy::Auto == AAUDIO_POLICY_AUTO, ERRMSG);
     static_assert((int32_t)MMapPolicy::Always == AAUDIO_POLICY_ALWAYS, ERRMSG);
 
-#endif // __NDK_MAJOR__ >= 28
+#endif // __NDK_MAJOR__ >= 29
 
 #endif // AAUDIO_AAUDIO_H
 

@@ -14,7 +14,7 @@
 # limitations under the License.
 #
 
-cmake_minimum_required(VERSION 3.4.1)
+cmake_minimum_required(VERSION 3.22.1)
 
 ### INCLUDE OBOE LIBRARY ###
 
@@ -57,4 +57,4 @@ target_link_options(hello-oboe PRIVATE "-Wl,-z,max-page-size=16384")
 
 # Enable optimization flags: if having problems with source level debugging,
 # disable -Ofast ( and debug ), re-enable after done debugging.
-target_compile_options(hello-oboe PRIVATE -Wall -Werror "$<$<CONFIG:RELEASE>:-Ofast>")
+target_compile_options(hello-oboe PRIVATE -Wall -Werror "$<$<CONFIG:RELEASE>:-O3 -ffast-math>")

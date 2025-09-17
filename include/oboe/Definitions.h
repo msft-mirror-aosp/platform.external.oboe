@@ -290,7 +290,7 @@ namespace oboe {
          * With the offload playback, the default data callback size will be large and it
          * allows data feeding thread to sleep longer time after sending enough data.
          */
-        POWER_SAVING_OFFLOADED = 13, // AAUDIO_PERFORMANCE_MODE_POWER_SAVING_OFFLOADED
+        PowerSavingOffloaded = 13, // AAUDIO_PERFORMANCE_MODE_POWER_SAVING_OFFLOADED
     };
 
     /**
@@ -1075,6 +1075,83 @@ namespace oboe {
          * AAudio MMAP must be used or fail.
          */
         Always
+    };
+
+    /**
+     * The values are defined to be used for the accuracy requirement when calling
+     * AudioStream.flushFromFrame.
+     */
+    enum class FlushFromAccuracy : int32_t {
+        /**
+         * There is not requirement for frame accuracy when flushing, it is up to the OS
+         * to select a right position to flush from.
+         */
+        Undefined = 0, // AAUDIO_FLUSH_FROM_ACCURACY_UNDEFINED
+
+        /**
+         * The stream must be flushed from the requested position. If it is not possible to flush
+         * from the requested position, the stream must not be flushed.
+         */
+        Accurate = 1, // AAUDIO_FLUSH_FROM_ACCURACY_ACCURATE
+    };
+
+    /**
+     * Behavior when the values for speed and / or pitch are out of the applicable range.
+     */
+    enum class FallbackMode : int32_t {
+        /**
+         * It is up to the system to choose best handling.
+         */
+        Default = 0, // AAUDIO_FALLBACK_MODE_DEFAULT
+        /**
+         * Play silence for parameter values that are out of range.
+         */
+        Mute = 1, // AAUDIO_FALLBACK_MODE_MUTE
+        /**
+         * When the requested speed and or pitch is out of range, processing will be
+         * stopped and an error will be returned.
+         */
+        Fail = 2, // AAUDIO_FALLBACK_MODE_FAIL
+    };
+
+    /**
+     * Algorithms used for time-stretching (preserving pitch while playing audio
+     * content at different speed).
+     */
+    enum class StretchMode : int32_t {
+        /**
+         * Time-stretching algorithm is selected by the system.
+         */
+        Default = 0, // AAUDIO_STRETCH_MODE_DEFAULT
+        /**
+         * Selects time-stretch algorithm best suitable for voice (speech) content.
+         */
+        Voice = 1, // AAUDIO_STRETCH_MODE_VOICE
+    };
+
+    /**
+     * Structure for common playback params.
+     */
+    struct PlaybackParameters {
+        /**
+         * See `FallbackMode`.
+         */
+        FallbackMode fallbackMode;
+        /**
+         * See `StretchMode`.
+         */
+        StretchMode stretchMode;
+        /**
+         * Increases or decreases the tonal frequency of the audio content.
+         * It is expressed as a multiplicative factor, where normal pitch is 1.0f.
+         * The pitch must be in range of [0.25f, 4.0f].
+         */
+        float pitch;
+        /**
+         * Increases or decreases the time to play back a set of audio frames.
+         * Normal speed is 1.0f. The speed must in range of [0.01f, 20.0f].
+         */
+        float speed;
     };
 
     /**

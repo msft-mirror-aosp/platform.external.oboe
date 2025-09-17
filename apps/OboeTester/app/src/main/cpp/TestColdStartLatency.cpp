@@ -52,7 +52,9 @@ int32_t TestColdStartLatency::open(bool useInput, bool useLowLatency, bool useMm
     // Revert MMAP back to its previous state
     AAudioExtensions::getInstance().setMMapEnabled(wasMMapEnabled);
 
-    mDeviceId = mStream->getDeviceId();
+    if (result == Result::OK) {
+        mDeviceId = mStream->getDeviceId();
+    }
 
     return (int32_t) result;
 }
@@ -67,6 +69,9 @@ int32_t TestColdStartLatency::start() {
 }
 
 int32_t TestColdStartLatency::close() {
+    if (!mStream) {
+        return (int32_t)Result::OK;
+    }
     Result result1 = mStream->requestStop();
     Result result2 = mStream->close();
     return (int32_t)((result1 != Result::OK) ? result1 : result2);
@@ -94,6 +99,12 @@ int32_t TestColdStartLatency::getColdStartTimeMicros() {
     int64_t timeOfFrameZero = timestampNanos - elapsedNanos;
     int64_t coldStartLatencyNanos = timeOfFrameZero - mBeginStartNanos;
     return coldStartLatencyNanos / NANOS_PER_MICROSECOND;
+}
+
+void TestColdStartLatency::waitForValidTimestamp() {
+    while (!mStream->getTimestamp(CLOCK_MONOTONIC)) {
+        usleep(kPollPeriodMillis * 1000);
+    }
 }
 
 // Callback that sleeps then touches the audio buffer.

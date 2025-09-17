@@ -33,6 +33,9 @@
 #include "TestErrorCallback.h"
 #include "TestRoutingCrash.h"
 #include "TestRapidCycle.h"
+#include "cpu/AudioWorkloadTest.h"
+#include "cpu/AudioWorkloadTestRunner.h"
+#include "ReverseJniEngine.h"
 
 static NativeAudioContext engine;
 
@@ -40,6 +43,21 @@ static NativeAudioContext engine;
 /**********************  JNI  Prototypes *****************************************/
 /*********************************************************************************/
 extern "C" {
+
+// --- Cached JNI IDs ---
+static jclass g_callbackStatusClass = nullptr;
+static jmethodID g_callbackStatusConstructor = nullptr;
+
+static jclass g_arrayListClass = nullptr;
+static jmethodID g_arrayListConstructor = nullptr;
+static jmethodID g_arrayListAddMethod = nullptr;
+
+static jclass g_playbackParametersClass = nullptr;
+static jmethodID g_playbackParametersConstructor = nullptr;
+static jfieldID g_fallbackModeField = nullptr;
+static jfieldID g_stretchModeField = nullptr;
+static jfieldID g_pitchField = nullptr;
+static jfieldID g_speedField = nullptr;
 
 JNIEXPORT jint JNICALL
 Java_com_mobileer_oboetester_OboeAudioStream_openNative(JNIEnv *env, jobject,
@@ -61,7 +79,9 @@ Java_com_mobileer_oboetester_OboeAudioStream_openNative(JNIEnv *env, jobject,
                                                        jint rateConversionQuality,
                                                        jboolean isMMap,
                                                        jboolean isInput,
-                                                       jint spatializationBehavior);
+                                                       jint spatializationBehavior,
+                                                       jstring packageName,
+                                                       jstring attributionTag);
 JNIEXPORT void JNICALL
 Java_com_mobileer_oboetester_OboeAudioStream_close(JNIEnv *env, jobject, jint);
 
@@ -84,6 +104,10 @@ Java_com_mobileer_oboetester_OboeAudioStream_setCallbackReturnStop(JNIEnv *env,
 JNIEXPORT void JNICALL
 Java_com_mobileer_oboetester_OboeAudioStream_setCallbackSize(JNIEnv *env, jclass type,
                                                             jint callbackSize);
+
+JNIEXPORT void JNICALL
+Java_com_mobileer_oboetester_OboeAudioStream_setUsePartialCallbackNative(
+        JNIEnv *env, jclass type, jboolean usePartialCallback);
 
 // ================= OboeAudioOutputStream ================================
 
@@ -139,6 +163,13 @@ Java_com_mobileer_oboetester_NativeEngine_setWorkloadReportingEnabled(JNIEnv *en
     engine.getCurrentActivity()->setWorkloadReportingEnabled(enabled);
 }
 
+JNIEXPORT void JNICALL
+Java_com_mobileer_oboetester_NativeEngine_setNotifyWorkloadIncreaseEnabled(JNIEnv *env,
+                                                                      jclass type,
+                                                                      jboolean enabled) {
+    engine.getCurrentActivity()->setNotifyWorkloadIncreaseEnabled(enabled);
+}
+
 JNIEXPORT jint JNICALL
 Java_com_mobileer_oboetester_OboeAudioStream_openNative(
         JNIEnv *env, jobject synth,
@@ -160,28 +191,40 @@ Java_com_mobileer_oboetester_OboeAudioStream_openNative(
         jint rateConversionQuality,
         jboolean isMMap,
         jboolean isInput,
-        jint spatializationBehavior) {
+        jint spatializationBehavior,
+        jstring packageName,
+        jstring attributionTag) {
     LOGD("OboeAudioStream_openNative: sampleRate = %d", sampleRate);
 
-    return (jint) engine.getCurrentActivity()->open(nativeApi,
-                                                    sampleRate,
-                                                    channelCount,
-                                                    channelMask,
-                                                    format,
-                                                    sharingMode,
-                                                    performanceMode,
-                                                    inputPreset,
-                                                    usage,
-                                                    contentType,
-                                                    bufferCapacityInFrames,
-                                                    deviceId,
-                                                    sessionId,
-                                                    channelConversionAllowed,
-                                                    formatConversionAllowed,
-                                                    rateConversionQuality,
-                                                    isMMap,
-                                                    isInput,
-                                                    spatializationBehavior);
+    const char *packageNameStr = env->GetStringUTFChars(packageName, nullptr);
+    const char *attributionTagStr = env->GetStringUTFChars(attributionTag, nullptr);
+
+    int result = engine.getCurrentActivity()->open(nativeApi,
+                                      sampleRate,
+                                      channelCount,
+                                      channelMask,
+                                      format,
+                                      sharingMode,
+                                      performanceMode,
+                                      inputPreset,
+                                      usage,
+                                      contentType,
+                                      bufferCapacityInFrames,
+                                      deviceId,
+                                      sessionId,
+                                      channelConversionAllowed,
+                                      formatConversionAllowed,
+                                      rateConversionQuality,
+                                      isMMap,
+                                      isInput,
+                                      spatializationBehavior,
+                                      packageNameStr,
+                                      attributionTagStr);
+
+    env->ReleaseStringUTFChars(packageName, packageNameStr);
+    env->ReleaseStringUTFChars(attributionTag, attributionTagStr);
+
+    return (jint) result;
 }
 
 JNIEXPORT jint JNICALL
@@ -197,6 +240,13 @@ Java_com_mobileer_oboetester_TestAudioActivity_pauseNative(JNIEnv *env, jobject)
 JNIEXPORT jint JNICALL
 Java_com_mobileer_oboetester_TestAudioActivity_flushNative(JNIEnv *env, jobject) {
     return (jint) engine.getCurrentActivity()->flush();
+}
+
+JNIEXPORT jlong JNICALL
+Java_com_mobileer_oboetester_TestAudioActivity_flushFromFrameNative(
+        JNIEnv * /*env*/, jobject, jint accuracy, jlong frames) {
+    return (jlong) engine.getCurrentActivity()->flushFromFrame(
+            accuracy, static_cast<int64_t>(frames));
 }
 
 JNIEXPORT jint JNICALL
@@ -225,6 +275,35 @@ Java_com_mobileer_oboetester_TestAudioActivity_setupMemoryBuffer(JNIEnv *env, jo
 }
 
 JNIEXPORT jint JNICALL
+Java_com_mobileer_oboetester_TestAudioActivity_setPlaybackParametersNative(
+        JNIEnv *env, jobject, jobject playbackParameters) {
+    oboe::PlaybackParameters params{};
+    params.fallbackMode = static_cast<oboe::FallbackMode>(
+            env->GetIntField(playbackParameters, g_fallbackModeField));
+    params.stretchMode = static_cast<oboe::StretchMode>(
+            env->GetIntField(playbackParameters, g_stretchModeField));
+    params.pitch = static_cast<float>(env->GetFloatField(playbackParameters, g_pitchField));
+    params.speed = static_cast<float>(env->GetFloatField(playbackParameters, g_speedField));
+
+    return static_cast<jint>(engine.getCurrentActivity()->setPlaybackParameters(params));
+}
+
+JNIEXPORT jobject JNICALL
+Java_com_mobileer_oboetester_TestAudioActivity_getPlaybackParametersNative(
+        JNIEnv *env, jobject) {
+    oboe::ResultWithValue<oboe::PlaybackParameters> result =
+            engine.getCurrentActivity()->getPlaybackParameters();
+    if (!result) {
+        return nullptr;
+    }
+    oboe::PlaybackParameters params = result.value();
+
+    return env->NewObject(g_playbackParametersClass, g_playbackParametersConstructor,
+                          (jint)params.fallbackMode,
+                          (jint)params.stretchMode, params.pitch, params.speed);
+}
+
+JNIEXPORT jint JNICALL
 Java_com_mobileer_oboetester_OboeAudioStream_startPlaybackNative(JNIEnv *env, jobject) {
     return (jint) engine.getCurrentActivity()->startPlayback();
 }
@@ -242,14 +321,7 @@ Java_com_mobileer_oboetester_TestAudioActivity_setUseAlternativeAdpf(JNIEnv *env
 JNIEXPORT jint JNICALL
 Java_com_mobileer_oboetester_OboeAudioStream_setBufferSizeInFrames(
         JNIEnv *env, jobject, jint streamIndex, jint threshold) {
-    std::shared_ptr<oboe::AudioStream> oboeStream = engine.getCurrentActivity()->getStream(streamIndex);
-    if (oboeStream != nullptr) {
-        auto result = oboeStream->setBufferSizeInFrames(threshold);
-        return (!result)
-               ? (jint) result.error()
-               : (jint) result.value();
-    }
-    return (jint) oboe::Result::ErrorNull;
+    return (jint) engine.getCurrentActivity()->setBufferSizeInFrames(streamIndex, threshold);
 }
 
 JNIEXPORT jint JNICALL
@@ -261,6 +333,12 @@ Java_com_mobileer_oboetester_OboeAudioStream_getBufferSizeInFrames(
         result = oboeStream->getBufferSizeInFrames();
     }
     return result;
+}
+
+JNIEXPORT void JNICALL
+Java_com_mobileer_oboetester_OboeAudioStream_setPartialCallbackPercentage(
+        JNIEnv * /*env*/, jobject /*thiz*/, jint percentage) {
+    engine.getCurrentActivity()->setPartialCallbackPercentage(percentage);
 }
 
 JNIEXPORT void JNICALL
@@ -504,6 +582,26 @@ Java_com_mobileer_oboetester_OboeAudioStream_getSessionId(
     return result;
 }
 
+JNIEXPORT jstring JNICALL
+Java_com_mobileer_oboetester_OboeAudioStream_getPackageName(
+        JNIEnv *env, jobject, jint streamIndex) {
+    std::shared_ptr<oboe::AudioStream> oboeStream = engine.getCurrentActivity()->getStream(streamIndex);
+    if (oboeStream != nullptr) {
+        return env->NewStringUTF(oboeStream->getPackageName().c_str());
+    }
+    return env->NewStringUTF("");
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_mobileer_oboetester_OboeAudioStream_getAttributionTag(
+        JNIEnv *env, jobject, jint streamIndex) {
+    std::shared_ptr<oboe::AudioStream> oboeStream = engine.getCurrentActivity()->getStream(streamIndex);
+    if (oboeStream != nullptr) {
+        return env->NewStringUTF(oboeStream->getAttributionTag().c_str());
+    }
+    return env->NewStringUTF("");
+}
+
 JNIEXPORT jlong JNICALL
 Java_com_mobileer_oboetester_OboeAudioStream_getFramesWritten(
         JNIEnv *env, jobject, jint streamIndex) {
@@ -652,6 +750,12 @@ JNIEXPORT void JNICALL
 Java_com_mobileer_oboetester_OboeAudioStream_setCallbackSize(JNIEnv *env, jclass type,
                                                             jint callbackSize) {
     ActivityContext::callbackSize = callbackSize;
+}
+
+JNIEXPORT void JNICALL
+Java_com_mobileer_oboetester_OboeAudioStream_setUsePartialDataCallbackNative(
+        JNIEnv *env, jclass type, jboolean usePartialDataCallback) {
+    ActivityContext::mUsePartialDataCallback = usePartialDataCallback;
 }
 
 JNIEXPORT jboolean JNICALL
@@ -803,7 +907,11 @@ Java_com_mobileer_oboetester_AnalyzerActivity_isAnalyzerDone(JNIEnv *env,
 JNIEXPORT jint JNICALL
 Java_com_mobileer_oboetester_AnalyzerActivity_getResetCount(JNIEnv *env,
                                                                           jobject instance) {
-    return ((ActivityFullDuplex *)engine.getCurrentActivity())->getResetCount();
+    auto activity = (ActivityFullDuplex *)engine.getCurrentActivity();
+    if (activity == nullptr) {
+        return -1;
+    }
+    return activity->getResetCount();
 }
 
 // ==========================================================================
@@ -954,6 +1062,13 @@ Java_com_mobileer_oboetester_TestAudioActivity_setDefaultAudioValues(JNIEnv *env
     oboe::DefaultStreamValues::FramesPerBurst = audio_manager_frames_per_burst;
 }
 
+JNIEXPORT void JNICALL
+Java_com_mobileer_oboetester_TapToToneActivity_useNoisePulse(JNIEnv *env,
+                                                             jclass clazz,
+                                                             jboolean enabled) {
+    engine.mActivityTapToTone.useNoisePulse(enabled);
+}
+
 static TestErrorCallback sErrorCallbackTester;
 
 JNIEXPORT void JNICALL
@@ -1028,6 +1143,12 @@ Java_com_mobileer_oboetester_TestColdStartLatencyActivity_getColdStartTimeMicros
     return sColdStartLatency.getColdStartTimeMicros();
 }
 
+JNIEXPORT void JNICALL
+Java_com_mobileer_oboetester_TestColdStartLatencyActivity_waitForValidTimestamp(
+        JNIEnv *env, jobject instance) {
+    sColdStartLatency.waitForValidTimestamp();
+}
+
 JNIEXPORT jint JNICALL
 Java_com_mobileer_oboetester_TestColdStartLatencyActivity_getAudioDeviceId(
         JNIEnv *env, jobject instance) {
@@ -1050,6 +1171,349 @@ Java_com_mobileer_oboetester_TestRapidCycleActivity_stopRapidCycleTest(JNIEnv *e
 JNIEXPORT jint JNICALL
 Java_com_mobileer_oboetester_TestRapidCycleActivity_getCycleCount(JNIEnv *env, jobject thiz) {
     return sRapidCycle.getCycleCount();
+}
+
+static AudioWorkloadTest sAudioWorkload;
+
+JNIEXPORT jint JNICALL
+Java_com_mobileer_oboetester_AudioWorkloadTestActivity_open(JNIEnv *env, jobject thiz) {
+    return sAudioWorkload.open();
+}
+
+JNIEXPORT jint JNICALL
+Java_com_mobileer_oboetester_AudioWorkloadTestActivity_getFramesPerBurst(JNIEnv *env, jobject thiz) {
+    return sAudioWorkload.getFramesPerBurst();
+}
+
+JNIEXPORT jint JNICALL
+Java_com_mobileer_oboetester_AudioWorkloadTestActivity_getSampleRate(JNIEnv *env, jobject thiz) {
+    return sAudioWorkload.getSampleRate();
+}
+
+JNIEXPORT jint JNICALL
+Java_com_mobileer_oboetester_AudioWorkloadTestActivity_getBufferSizeInFrames(JNIEnv *env, jobject thiz) {
+    return sAudioWorkload.getBufferSizeInFrames();
+}
+
+JNIEXPORT jint JNICALL
+Java_com_mobileer_oboetester_AudioWorkloadTestActivity_start(JNIEnv *env, jobject thiz,
+        jint targetDurationMs, jint numBursts, jint numVoices, jint numAlternateVoices,
+        jint alternatingPeriodMs, jboolean adpfEnabled, jboolean adpfWorkloadIncreaseEnabled,
+        jboolean hearWorkload) {
+    return sAudioWorkload.start(targetDurationMs, numBursts, numVoices,
+                                numAlternateVoices, alternatingPeriodMs, adpfEnabled,
+                                adpfWorkloadIncreaseEnabled, hearWorkload);
+}
+
+JNIEXPORT jint JNICALL
+Java_com_mobileer_oboetester_AudioWorkloadTestActivity_getCpuCount(JNIEnv *env, jobject thiz) {
+    return AudioWorkloadTest::getCpuCount();
+}
+
+JNIEXPORT jint JNICALL
+Java_com_mobileer_oboetester_AudioWorkloadTestActivity_setCpuAffinityForCallback(JNIEnv *env, jobject thiz,
+                                                                                 jint mask) {
+    return AudioWorkloadTest::setCpuAffinityForCallback(mask);
+}
+
+JNIEXPORT jint JNICALL
+Java_com_mobileer_oboetester_AudioWorkloadTestActivity_getXRunCount(JNIEnv *env, jobject thiz) {
+    return sAudioWorkload.getXRunCount();
+}
+
+JNIEXPORT jint JNICALL
+Java_com_mobileer_oboetester_AudioWorkloadTestActivity_getCallbackCount(JNIEnv *env, jobject thiz) {
+    return sAudioWorkload.getCallbackCount();
+}
+
+JNIEXPORT jlong JNICALL
+Java_com_mobileer_oboetester_AudioWorkloadTestActivity_getLastDurationNs(JNIEnv *env, jobject thiz) {
+    return sAudioWorkload.getLastDurationNs();
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_mobileer_oboetester_AudioWorkloadTestActivity_isRunning(JNIEnv *env, jobject thiz) {
+    return sAudioWorkload.isRunning();
+}
+
+JNIEXPORT jint JNICALL
+Java_com_mobileer_oboetester_AudioWorkloadTestActivity_stop(JNIEnv *env, jobject thiz) {
+    return sAudioWorkload.stop();
+}
+
+JNIEXPORT jint JNICALL
+Java_com_mobileer_oboetester_AudioWorkloadTestActivity_close(JNIEnv *env, jobject thiz) {
+    return sAudioWorkload.close();
+}
+
+// Store the JavaVM pointer to get JNIEnv in JNI_OnLoad/OnUnload
+static JavaVM* g_javaVM = nullptr;
+
+// Cache jni classes and methods for getCallbackStatistics
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
+    g_javaVM = vm; // Cache the JavaVM pointer
+    JNIEnv* env;
+    if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
+        LOGE("JNI_OnLoad: Failed to get JNIEnv.");
+        return JNI_ERR;
+    }
+
+    const char* callbackStatusClassName =
+            "com/mobileer/oboetester/AudioWorkloadTestActivity$CallbackStatus";
+    jclass localCallbackStatusClass = env->FindClass(callbackStatusClassName);
+    if (localCallbackStatusClass == nullptr) {
+        LOGE("JNI_OnLoad: Could not find class %s", callbackStatusClassName);
+        if (env->ExceptionCheck()) env->ExceptionDescribe();
+        return JNI_ERR;
+    }
+    // Create a global reference for the class
+    g_callbackStatusClass = (jclass)env->NewGlobalRef(localCallbackStatusClass);
+    env->DeleteLocalRef(localCallbackStatusClass); // Clean up the local reference
+    if (g_callbackStatusClass == nullptr) {
+        LOGE("JNI_OnLoad: Could not create global ref for %s", callbackStatusClassName);
+        return JNI_ERR;
+    }
+
+    g_callbackStatusConstructor = env->GetMethodID(g_callbackStatusClass, "<init>", "(IJJII)V");
+    if (g_callbackStatusConstructor == nullptr) {
+        LOGE("JNI_OnLoad: Could not find constructor for %s", callbackStatusClassName);
+        if (env->ExceptionCheck()) env->ExceptionDescribe();
+        return JNI_ERR;
+    }
+
+    const char* arrayListClassName = "java/util/ArrayList";
+    jclass localArrayListClass = env->FindClass(arrayListClassName);
+    if (localArrayListClass == nullptr) {
+        LOGE("JNI_OnLoad: Could not find class %s", arrayListClassName);
+        if (env->ExceptionCheck()) env->ExceptionDescribe();
+        return JNI_ERR;
+    }
+    g_arrayListClass = (jclass)env->NewGlobalRef(localArrayListClass);
+    env->DeleteLocalRef(localArrayListClass); // Clean up local reference
+    if (g_arrayListClass == nullptr) {
+        LOGE("JNI_OnLoad: Could not create global ref for %s", arrayListClassName);
+        return JNI_ERR;
+    }
+
+    g_arrayListConstructor = env->GetMethodID(g_arrayListClass, "<init>", "()V");
+    if (g_arrayListConstructor == nullptr) {
+        LOGE("JNI_OnLoad: Could not find constructor for %s", arrayListClassName);
+        if (env->ExceptionCheck()) env->ExceptionDescribe();
+        return JNI_ERR;
+    }
+
+    g_arrayListAddMethod = env->GetMethodID(g_arrayListClass, "add", "(Ljava/lang/Object;)Z");
+    if (g_arrayListAddMethod == nullptr) {
+        LOGE("JNI_OnLoad: Could not find 'add' method for %s", arrayListClassName);
+        if (env->ExceptionCheck()) env->ExceptionDescribe();
+        return JNI_ERR;
+    }
+
+    const char* playbackParametersClassName = "com/mobileer/oboetester/PlaybackParameters";
+    jclass localPlaybackParametersClass = env->FindClass(playbackParametersClassName);
+    if (localPlaybackParametersClass == nullptr) {
+        LOGE("JNI_OnLoad: Could not find class %s", playbackParametersClassName);
+        if (env->ExceptionCheck()) env->ExceptionDescribe();
+        return JNI_ERR;
+    }
+    g_playbackParametersClass = (jclass)env->NewGlobalRef(localPlaybackParametersClass);
+    env->DeleteLocalRef(localPlaybackParametersClass);
+    if (g_playbackParametersClass == nullptr) {
+        LOGE("JNI_OnLoad: Could not create global ref for %s", playbackParametersClassName);
+        return JNI_ERR;
+    }
+
+    g_playbackParametersConstructor = env->GetMethodID(
+            g_playbackParametersClass, "<init>", "(IIFF)V");
+    if (g_playbackParametersConstructor == nullptr) {
+        LOGE("JNI_OnLoad: Could not find constructor for %s", playbackParametersClassName);
+        if (env->ExceptionCheck()) env->ExceptionDescribe();
+        return JNI_ERR;
+    }
+
+    g_fallbackModeField = env->GetFieldID(g_playbackParametersClass, "mFallbackMode", "I");
+    g_stretchModeField = env->GetFieldID(g_playbackParametersClass, "mStretchMode", "I");
+    g_pitchField = env->GetFieldID(g_playbackParametersClass, "mPitch", "F");
+    g_speedField = env->GetFieldID(g_playbackParametersClass, "mSpeed", "F");
+
+    std::cout << "JNI_OnLoad: Successfully cached JNI class and method IDs." << std::endl;
+    return JNI_VERSION_1_6;
+}
+
+// Unload the jni classes and methods for getCallbackStatistics
+JNIEXPORT void JNICALL JNI_OnUnload(JavaVM* vm, void* reserved) {
+    JNIEnv* env;
+    if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
+        LOGE("JNI_OnUnload: Failed to get JNIEnv.");
+        return;
+    }
+
+    // Delete global references
+    if (g_callbackStatusClass != nullptr) {
+        env->DeleteGlobalRef(g_callbackStatusClass);
+        g_callbackStatusClass = nullptr;
+    }
+    if (g_arrayListClass != nullptr) {
+        env->DeleteGlobalRef(g_arrayListClass);
+        g_arrayListClass = nullptr;
+    }
+    if (g_playbackParametersClass != nullptr) {
+        env->DeleteGlobalRef(g_playbackParametersClass);
+        g_playbackParametersClass = nullptr;
+    }
+
+    g_callbackStatusConstructor = nullptr;
+    g_arrayListConstructor = nullptr;
+    g_arrayListAddMethod = nullptr;
+    g_playbackParametersConstructor = nullptr;
+    g_fallbackModeField = nullptr;
+    g_stretchModeField = nullptr;
+    g_pitchField = nullptr;
+    g_speedField = nullptr;
+
+    g_javaVM = nullptr;
+    std::cout << "JNI_OnUnload: Released global JNI references." << std::endl;
+}
+
+JNIEXPORT jobject JNICALL
+Java_com_mobileer_oboetester_AudioWorkloadTestActivity_getCallbackStatistics(JNIEnv *env,
+                                                                             jobject obj) {
+    if (g_callbackStatusClass == nullptr || g_callbackStatusConstructor == nullptr ||
+        g_arrayListClass == nullptr || g_arrayListConstructor == nullptr ||
+        g_arrayListAddMethod == nullptr) {
+        LOGE("Error: JNI IDs not cached. Initialization in JNI_OnLoad might have failed.");
+        return nullptr;
+    }
+
+    std::vector<AudioWorkloadTest::CallbackStatus> cppCallbackStats =
+            sAudioWorkload.getCallbackStatistics();
+
+    jobject javaList = env->NewObject(g_arrayListClass, g_arrayListConstructor);
+    if (javaList == nullptr) {
+        LOGE("Error: Could not create new ArrayList object.");
+        if (env->ExceptionCheck()) env->ExceptionDescribe();
+        return nullptr;
+    }
+
+    for (const auto& status : cppCallbackStats) {
+        jobject javaStatus = env->NewObject(
+                g_callbackStatusClass,
+                g_callbackStatusConstructor,
+                (jint)status.numVoices,
+                (jlong)status.beginTimeNs,
+                (jlong)status.finishTimeNs,
+                (jint)status.xRunCount,
+                (jint)status.cpuIndex
+        );
+        if (javaStatus == nullptr) {
+            LOGE("Error: Could not create new CallbackStatus object.");
+            if (env->ExceptionCheck()) env->ExceptionDescribe();
+            env->DeleteLocalRef(javaList);
+            return nullptr;
+        }
+
+        env->CallBooleanMethod(javaList, g_arrayListAddMethod, javaStatus);
+        env->DeleteLocalRef(javaStatus);
+    }
+
+    return javaList;
+}
+
+static AudioWorkloadTestRunner sAudioWorkloadRunner;
+
+JNIEXPORT jint JNICALL
+Java_com_mobileer_oboetester_AudioWorkloadTestRunnerActivity_start(JNIEnv *env, jobject thiz,
+                                                   jint targetDurationMs,
+                                                   jint numBursts,
+                                                   jint numVoices,
+                                                   jint alternateNumVoices,
+                                                   jint alternatingPeriodMillis,
+                                                   jboolean adpfEnabled,
+                                                   jboolean adpfWorkloadIncreaseEnabled,
+                                                   jboolean hearWorkload) {
+    return sAudioWorkloadRunner.start(targetDurationMs, numBursts, numVoices,
+                                      alternateNumVoices, alternatingPeriodMillis, adpfEnabled,
+                                      adpfWorkloadIncreaseEnabled, hearWorkload);
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_mobileer_oboetester_AudioWorkloadTestRunnerActivity_stopIfDone(JNIEnv *env, jobject thiz) {
+    return sAudioWorkloadRunner.stopIfDone();
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_mobileer_oboetester_AudioWorkloadTestRunnerActivity_getStatus(JNIEnv *env, jobject thiz) {
+    std::string status = sAudioWorkloadRunner.getStatus();
+    return env->NewStringUTF(status.c_str());
+}
+
+JNIEXPORT jint JNICALL
+Java_com_mobileer_oboetester_AudioWorkloadTestRunnerActivity_stop(JNIEnv *env, jobject thiz) {
+    return sAudioWorkloadRunner.stop();
+}
+
+JNIEXPORT jint JNICALL
+Java_com_mobileer_oboetester_AudioWorkloadTestRunnerActivity_getResult(JNIEnv *env, jobject thiz) {
+    return sAudioWorkloadRunner.getResult();
+}
+
+JNIEXPORT jint JNICALL
+Java_com_mobileer_oboetester_AudioWorkloadTestRunnerActivity_getXRunCount(JNIEnv *env, jobject thiz) {
+    return sAudioWorkloadRunner.getXRunCount();
+}
+
+JNIEXPORT jlong JNICALL
+Java_com_mobileer_oboetester_ReverseJniEngine_createEngine(JNIEnv *env, jobject thiz, jint channelCount) {
+    ReverseJniEngine *reverseJniEngine = new ReverseJniEngine(env, thiz, channelCount);
+    return reinterpret_cast<jlong>(reverseJniEngine);
+}
+
+JNIEXPORT void JNICALL
+Java_com_mobileer_oboetester_ReverseJniEngine_startEngine(JNIEnv *env, jobject thiz, jlong enginePtr, jint bufferSizeInBursts, jint sleepDurationUs) {
+    ReverseJniEngine *reverseJniEngine = reinterpret_cast<ReverseJniEngine *>(enginePtr);
+    if (reverseJniEngine) {
+        reverseJniEngine->start(bufferSizeInBursts, sleepDurationUs);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_mobileer_oboetester_ReverseJniEngine_stopEngine(JNIEnv *env, jobject thiz, jlong enginePtr) {
+    ReverseJniEngine *reverseJniEngine = reinterpret_cast<ReverseJniEngine *>(enginePtr);
+    if (reverseJniEngine) {
+        reverseJniEngine->stop();
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_mobileer_oboetester_ReverseJniEngine_deleteEngine(JNIEnv *env, jobject thiz, jlong enginePtr) {
+    ReverseJniEngine *reverseJniEngine = reinterpret_cast<ReverseJniEngine *>(enginePtr);
+    if (reverseJniEngine) {
+        delete reverseJniEngine;
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_mobileer_oboetester_ReverseJniEngine_setBufferSizeInBursts(JNIEnv *env, jobject thiz, jlong enginePtr, jint bufferSizeInBursts) {
+    ReverseJniEngine *reverseJniEngine = reinterpret_cast<ReverseJniEngine *>(enginePtr);
+    if (reverseJniEngine) {
+        reverseJniEngine->setBufferSizeInBursts(bufferSizeInBursts);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_mobileer_oboetester_ReverseJniEngine_setSleepDurationUs(JNIEnv *env, jobject thiz, jlong enginePtr, jint sleepDurationUs) {
+    ReverseJniEngine *reverseJniEngine = reinterpret_cast<ReverseJniEngine *>(enginePtr);
+    if (reverseJniEngine) {
+        reverseJniEngine->setSleepDurationUs(sleepDurationUs);
+    }
+}
+
+JNIEXPORT void JNICALL
+Java_com_mobileer_oboetester_ReverseJniEngine_setAudioBuffer(JNIEnv *env, jobject thiz, jlong enginePtr, jfloatArray buffer) {
+    ReverseJniEngine *reverseJniEngine = reinterpret_cast<ReverseJniEngine *>(enginePtr);
+    if (reverseJniEngine) {
+        reverseJniEngine->setAudioBuffer(env, buffer);
+    }
 }
 
 } // extern "C"

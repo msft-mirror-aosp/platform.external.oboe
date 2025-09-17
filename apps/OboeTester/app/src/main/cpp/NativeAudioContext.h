@@ -17,13 +17,17 @@
 #ifndef NATIVEOBOE_NATIVEAUDIOCONTEXT_H
 #define NATIVEOBOE_NATIVEAUDIOCONTEXT_H
 
+#include <atomic>
+#include <condition_variable>
 #include <jni.h>
+#include <mutex>
 #include <sys/system_properties.h>
 #include <thread>
 #include <unordered_map>
 #include <vector>
 
 #include "common/OboeDebug.h"
+#include "common/Trace.h"
 #include "oboe/Oboe.h"
 
 #include "aaudio/AAudioExtensions.h"
@@ -51,6 +55,7 @@
 #include "analyzer/DataPathAnalyzer.h"
 #include "InputStreamCallbackAnalyzer.h"
 #include "MultiChannelRecording.h"
+#include "NoisePulseGenerator.h"
 #include "OboeStreamCallbackProxy.h"
 #include "OboeTools.h"
 #include "PlayRecordingCallback.h"
@@ -66,6 +71,7 @@
 #define AMPLITUDE_SAWTOOTH       0.5
 #define FREQUENCY_SAW_PING       800.0
 #define AMPLITUDE_SAW_PING       0.8
+#define AMPLITUDE_NOISE_PULSE    0.8
 #define AMPLITUDE_IMPULSE        0.7
 
 
@@ -77,7 +83,7 @@
 class ActivityContext {
 public:
 
-    ActivityContext() {}
+    ActivityContext();
 
     virtual ~ActivityContext() = default;
 
@@ -88,6 +94,14 @@ public:
         } else {
             return nullptr;
         }
+    }
+
+    void setPartialCallbackPercentage(int percentage) {
+        if (percentage < 0 || percentage > 100) {
+            // Ignoring the error, this only comes from the UI and must be valid value.
+            return;
+        }
+        oboeCallbackProxy->setPartialDataCallbackPercentage(percentage);
     }
 
     virtual void configureBuilder(bool isInput, oboe::AudioStreamBuilder &builder);
@@ -111,6 +125,8 @@ public:
      * @param isMMap
      * @param isInput
      * @param spatializationBehavior
+     * @param packageName
+     * @param attributionTag
      * @return stream ID
      */
     int open(jint nativeApi,
@@ -131,7 +147,9 @@ public:
              jint rateConversionQuality,
              jboolean isMMap,
              jboolean isInput,
-             jint spatializationBehavior);
+             jint spatializationBehavior,
+             const char *packageName,
+             const char *attributionTag);
 
     oboe::Result release();
 
@@ -145,6 +163,10 @@ public:
 
     oboe::Result flush();
 
+    virtual int64_t flushFromFrame(int32_t accuracy, int64_t frame) {
+        return static_cast<int64_t>(oboe::Result::ErrorUnimplemented);
+    }
+
     oboe::Result stopAllStreams();
 
     virtual oboe::Result stop() {
@@ -152,27 +174,31 @@ public:
     }
 
     float getCpuLoad() {
-        return oboeCallbackProxy.getCpuLoad();
+        return oboeCallbackProxy->getCpuLoad();
     }
 
     float getAndResetMaxCpuLoad() {
-        return oboeCallbackProxy.getAndResetMaxCpuLoad();
+        return oboeCallbackProxy->getAndResetMaxCpuLoad();
     }
 
     uint32_t getAndResetCpuMask() {
-        return oboeCallbackProxy.getAndResetCpuMask();
+        return oboeCallbackProxy->getAndResetCpuMask();
     }
 
     std::string getCallbackTimeString() {
-        return oboeCallbackProxy.getCallbackTimeString();
+        return oboeCallbackProxy->getCallbackTimeString();
     }
 
     void setWorkload(int32_t workload) {
-        oboeCallbackProxy.setWorkload(workload);
+        oboeCallbackProxy->setWorkload(workload);
+        bool traceEnabled = oboe::Trace::getInstance().isEnabled();
+        if (traceEnabled) {
+            oboe::Trace::getInstance().setCounter("Workload", workload);
+        }
     }
 
     void setHearWorkload(bool enabled) {
-        oboeCallbackProxy.setHearWorkload(enabled);
+        oboeCallbackProxy->setHearWorkload(enabled);
     }
 
     virtual oboe::Result startPlayback() {
@@ -189,14 +215,7 @@ public:
         context->runBlockingIO();
     }
 
-    void stopBlockingIOThread() {
-        if (dataThread != nullptr) {
-            // stop a thread that runs in place of the callback
-            threadEnabled.store(false); // ask thread to exit its loop
-            dataThread->join();
-            dataThread = nullptr;
-        }
-    }
+    void stopBlockingIOThread();
 
     virtual double getPeakLevel(int index) {
         return 0.0;
@@ -269,7 +288,7 @@ public:
     }
 
     int64_t getCallbackCount() {
-        return oboeCallbackProxy.getCallbackCount();
+        return oboeCallbackProxy->getCallbackCount();
     }
 
     oboe::Result getLastErrorCallbackResult() {
@@ -281,7 +300,7 @@ public:
     }
 
     int32_t getFramesPerCallback() {
-        return oboeCallbackProxy.getFramesPerCallback();
+        return oboeCallbackProxy->getFramesPerCallback();
     }
 
     virtual void setChannelEnabled(int channelIndex, bool enabled) {}
@@ -290,22 +309,37 @@ public:
 
     virtual void setAmplitude(float amplitude) {}
 
+    virtual oboe::Result setPlaybackParameters(const oboe::PlaybackParameters& parameters) {
+        return oboe::Result::ErrorUnimplemented;
+    }
+
+    virtual oboe::ResultWithValue<oboe::PlaybackParameters> getPlaybackParameters() {
+        return oboe::ResultWithValue<oboe::PlaybackParameters>(oboe::Result::ErrorUnimplemented);
+    }
+
     virtual int32_t saveWaveFile(const char *filename);
 
     virtual void setMinimumFramesBeforeRead(int32_t numFrames) {}
 
     static bool   mUseCallback;
+    static bool   mUsePartialDataCallback;
     static int    callbackSize;
 
     double getTimestampLatency(int32_t streamIndex);
 
     void setCpuAffinityMask(uint32_t mask) {
-        oboeCallbackProxy.setCpuAffinityMask(mask);
+        oboeCallbackProxy->setCpuAffinityMask(mask);
     }
 
     void setWorkloadReportingEnabled(bool enabled) {
-        oboeCallbackProxy.setWorkloadReportingEnabled(enabled);
+        oboeCallbackProxy->setWorkloadReportingEnabled(enabled);
     }
+
+    void setNotifyWorkloadIncreaseEnabled(bool enabled) {
+        oboeCallbackProxy->setNotifyWorkloadIncreaseEnabled(enabled);
+    }
+
+    int32_t setBufferSizeInFrames(int streamIndex, int threshold);
 
     virtual void setupMemoryBuffer([[maybe_unused]] std::unique_ptr<uint8_t[]>& buffer,
                                    [[maybe_unused]] int length) {}
@@ -328,7 +362,7 @@ protected:
     std::unique_ptr<float []>    dataBuffer{};
 
     AudioStreamGateway           audioStreamGateway;
-    OboeStreamCallbackProxy      oboeCallbackProxy;
+    std::shared_ptr<OboeStreamCallbackProxy> oboeCallbackProxy;
 
     std::unique_ptr<MultiChannelRecording>  mRecording{};
 
@@ -337,9 +371,12 @@ protected:
     int32_t                      mFramesPerBurst = 0; // TODO per stream
     int32_t                      mChannelCount = 0; // TODO per stream
     int32_t                      mSampleRate = 0; // TODO per stream
+    std::atomic<int32_t>         mBufferSizeInFrames = 0; // TODO per stream
 
     std::atomic<bool>            threadEnabled{false};
     std::thread                 *dataThread = nullptr; // FIXME never gets deleted
+    std::mutex                   threadLock;
+    std::condition_variable      threadWorkCV;
 
 private:
     int64_t mInputOpenedAt = 0;
@@ -457,6 +494,12 @@ public:
 
     void setupMemoryBuffer(std::unique_ptr<uint8_t[]>& buffer, int length) final;
 
+    int64_t flushFromFrame(int32_t accuracy, int64_t frame) final;
+
+    oboe::Result setPlaybackParameters(const oboe::PlaybackParameters& parameters) final;
+
+    oboe::ResultWithValue<oboe::PlaybackParameters> getPlaybackParameters() final;
+
 protected:
     SignalType                       mSignalType = SignalType::Sine;
 
@@ -494,11 +537,21 @@ public:
 
     void configureAfterOpen() override;
 
-    virtual void trigger() override {
-        sawPingGenerator.trigger();
+    void trigger() override {
+        if (mUseNoisePulse) {
+            mNoisePulseGenerator.trigger();
+        } else {
+            mSawPingGenerator.trigger();
+        }
     }
 
-    SawPingGenerator             sawPingGenerator;
+    void useNoisePulse(bool enabled) {
+        mUseNoisePulse = enabled;
+    }
+
+    bool                         mUseNoisePulse;
+    SawPingGenerator             mSawPingGenerator;
+    NoisePulseGenerator          mNoisePulseGenerator;
 };
 
 /**
@@ -520,7 +573,15 @@ public:
     virtual FullDuplexAnalyzer *getFullDuplexAnalyzer() = 0;
 
     int32_t getResetCount() {
-        return getFullDuplexAnalyzer()->getLoopbackProcessor()->getResetCount();
+        auto analyzer = getFullDuplexAnalyzer();
+        if (analyzer == nullptr) {
+            return -1;
+        }
+        auto processor = analyzer->getLoopbackProcessor();
+        if (processor == nullptr) {
+            return -1;
+        }
+        return processor->getResetCount();
     }
 
 protected:

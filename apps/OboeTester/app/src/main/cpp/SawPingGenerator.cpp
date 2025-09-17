@@ -66,4 +66,3 @@ int32_t SawPingGenerator::onProcess(int numFrames) {
 void SawPingGenerator::trigger() {
     mRequestCount++;
 }
-

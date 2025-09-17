@@ -29,6 +29,7 @@ import android.widget.CheckBox;
 import android.widget.RadioButton;
 import android.widget.Spinner;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -133,13 +134,25 @@ public class TestColdStartLatencyActivity extends AppCompatActivity {
                 loopCount++;
                 try {
                     sleep(closedSleepTimeMillis);
-                    openStream(useInput, useLowLatency, useMmap, useExclusive);
+                    int result = openStream(useInput, useLowLatency, useMmap, useExclusive);
+                    if (result != 0) {
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                Toast.makeText(TestColdStartLatencyActivity.this,
+                                        "Error opening stream. Error: " + result,
+                                        Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                        break;
+                    }
                     log("-------#" + loopCount + " Device Id: " + getAudioDeviceId());
                     log("open() Latency: " + getOpenTimeMicros() / 1000 + " msec");
                     sleep(openSleepTimeMillis);
                     startStream();
                     log("requestStart() Latency: " + getStartTimeMicros() / 1000 + " msec");
                     sleep(startSleepTimeMillis);
+                    waitForValidTimestamp();
                     log("Cold Start Latency: " + getColdStartTimeMicros() / 1000 + " msec");
                     closeStream();
                 } catch (InterruptedException e) {
@@ -181,6 +194,7 @@ public class TestColdStartLatencyActivity extends AppCompatActivity {
                                   boolean useExclusive);
     private native int startStream();
     private native int closeStream();
+    private native void waitForValidTimestamp();
     private native int getOpenTimeMicros();
     private native int getStartTimeMicros();
     private native int getColdStartTimeMicros();
