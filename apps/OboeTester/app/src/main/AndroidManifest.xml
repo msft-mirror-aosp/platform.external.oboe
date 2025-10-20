@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.mobileer.oboetester">
+    <attribution
+        android:tag="AudioTag"
+        android:label="@string/audio_attribution_label" />
+
     <uses-feature
         android:name="android.hardware.microphone"
         android:required="false" />
@@ -23,6 +28,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <application
         android:icon="@mipmap/ic_launcher"
@@ -128,6 +134,21 @@
             android:label="@string/title_rapid_cycle"
             android:exported="true"
             android:screenOrientation="portrait" />
+        <activity
+            android:name=".AudioWorkloadTestActivity"
+            android:label="@string/title_audio_workload_test"
+            android:exported="true"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".AudioWorkloadTestRunnerActivity"
+            android:label="@string/title_audio_workload_test_runner"
+            android:exported="true"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name=".ReverseJniActivity"
+            android:label="@string/title_reverse_jni"
+            android:exported="true"
+            android:screenOrientation="portrait" />
 
         <service
             android:name=".MidiTapTester"
@@ -157,6 +178,9 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/provider_paths" />
         </provider>
+
+        <receiver android:name=".TestTimeoutReceiver" android:exported="false"/>
+
     </application>
 
 </manifest>
